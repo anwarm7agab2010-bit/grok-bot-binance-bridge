@@ -2,13 +2,12 @@ const http = require("http");
 const crypto = require("crypto");
 
 const PORT = process.env.PORT || 10000;
-const API_KEY = (process.env.BINANCE_API_KEY || "").replace(/[^A-Za-z0-9]/g, "");
-const API_SECRET = (process.env.BINANCE_API_SECRET || "").replace(/[^A-Za-z0-9]/g, "");
-const USE_TESTNET = String(process.env.BINANCE_TESTNET || "false").toLowerCase() === "true";
-const BASE_URL = USE_TESTNET ? "https://testnet.binance.vision" : "https://api.binance.com";
+const API_KEY = String(process.env.BINANCE_API_KEY || "").replace(/[^A-Za-z0-9]/g, "");
+const API_SECRET = String(process.env.BINANCE_API_SECRET || "").replace(/[^A-Za-z0-9]/g, "");
+const BASE_URL = "https://api.binance.com";
 
 const DEFAULT_RISK = Number(process.env.MAX_RISK_PER_TRADE || 0.02);
-const TELEGRAM_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || "").replace(/[\r\n]+/g, "").trim();
+const TELEGRAM_BOT_TOKEN = String(process.env.TELEGRAM_BOT_TOKEN || "").replace(/[\r\n\s]+/g, "");
 const ALLOWED_CHAT_ID = String(process.env.TELEGRAM_CHAT_ID || "6406388705").trim();
 
 let timeOffset = 0;
@@ -26,7 +25,7 @@ let botState = {
   startedAt: null,
   lastCycleAt: null,
   tradesCount: 0,
-  lastAction: "بانتظار أمر البدء (يعتمد على الرصيد الفعلي)",
+  lastAction: "جاهز — يعتمد على الرصيد الفعلي فقط",
   lastError: null,
   audits: []
 };
@@ -40,35 +39,37 @@ async function sendTelegramMessage(text, chatId = ALLOWED_CHAT_ID) {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: "Markdown"
-      })
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" })
     });
   } catch (_) {}
 }
 
 async function syncBinanceTime(force = false) {
   const now = Date.now();
-  if (!force && lastTimeSyncAt && now - lastTimeSyncAt < 60000) {
+  if (!force && lastTimeSyncAt && now - lastTimeSyncAt < 45000) {
     return timeOffset;
   }
+  const t0 = Date.now();
   const res = await fetch(`${BASE_URL}/api/v3/time`);
   const data = await res.json();
+  const t1 = Date.now();
   if (!res.ok || typeof data.serverTime !== "number") {
-    throw new Error(data.msg || "تعذر مزامنة وقت Binance");
+    throw new Error(data.msg || "فشل جلب وقت خادم Binance");
   }
-  timeOffset = data.serverTime - Date.now();
-  lastTimeSyncAt = Date.now();
+  const localMid = Math.floor((t0 + t1) / 2);
+  timeOffset = data.serverTime - localMid;
+  lastTimeSyncAt = t1;
   botState.timeOffsetMs = timeOffset;
   return timeOffset;
 }
 
-function signQuery(params, syncedTimestamp) {
-  const query = new URLSearchParams(params).toString();
-  const signature = crypto.createHmac("sha256", API_SECRET).update(query).digest("hex");
-  return `${query}&signature=${signature}`;
+function buildSignedQuery(params) {
+  const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "");
+  const queryString = entries
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join("&");
+  const signature = crypto.createHmac("sha256", API_SECRET).update(queryString).digest("hex");
+  return `${queryString}&signature=${signature}`;
 }
 
 async function binancePublic(path) {
@@ -79,16 +80,23 @@ async function binancePublic(path) {
 }
 
 async function binanceSigned(method, path, params = {}, retried = false) {
-  if (!API_KEY || !API_SECRET) {
-    throw new Error("متغيرات BINANCE_API_KEY أو BINANCE_API_SECRET غير مضبوطة");
+  if (API_KEY.length !== 64 || API_SECRET.length !== 64) {
+    throw new Error(`طول المفاتيح غير صحيح (KEY:${API_KEY.length}, SECRET:${API_SECRET.length})`);
   }
   await syncBinanceTime(retried);
   const timestamp = Date.now() + timeOffset;
-  const signed = signQuery({ ...params, timestamp, recvWindow: 10000 }, timestamp);
+  const fullQuery = buildSignedQuery({
+    ...params,
+    recvWindow: 15000,
+    timestamp
+  });
 
-  const res = await fetch(`${BASE_URL}${path}?${signed}`, {
+  const url = `${BASE_URL}${path}?${fullQuery}`;
+  const res = await fetch(url, {
     method,
-    headers: { "X-MBX-APIKEY": API_KEY }
+    headers: {
+      "X-MBX-APIKEY": API_KEY
+    }
   });
   const data = await res.json();
 
@@ -122,7 +130,6 @@ async function runAgentCycle() {
     const quoteVol = parseFloat(ticker.quoteVolume);
 
     const { free: usdtFree } = await fetchUsdtBalance();
-
     const riskFraction = Math.max(0.001, Math.min(1, Number(botState.maxRisk) || DEFAULT_RISK));
     const orderNotional = Number((usdtFree * riskFraction).toFixed(2));
 
@@ -131,7 +138,7 @@ async function runAgentCycle() {
     let orderExecuted = false;
 
     if (usdtFree >= 5.5 && orderNotional >= 5.5 && quoteVol > 10000000 && changePct > 0.35 && changePct < 6.0) {
-      if (botState.mode === "live" || botState.mode === "testnet") {
+      if (botState.mode === "live") {
         const order = await binanceSigned("POST", "/api/v3/order", {
           symbol,
           side: "BUY",
@@ -299,9 +306,9 @@ const server = http.createServer(async (req, res) => {
       ok: true,
       service: "grok-bot-binance-bridge",
       specId: "DESK-EVM-BINANCE-001",
-      keysConfigured: Boolean(API_KEY && API_SECRET),
+      keysConfigured: Boolean(API_KEY.length === 64 && API_SECRET.length === 64),
+      secretHashPrefix: crypto.createHash("sha256").update(API_SECRET).digest("hex").slice(0, 8),
       telegramConfigured: Boolean(TELEGRAM_BOT_TOKEN),
-      testnet: USE_TESTNET,
       state: botState
     });
   }
@@ -358,7 +365,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Binance Bridge running on port ${PORT}`);
+  console.log(`Binance Bridge v2 running on port ${PORT}`);
   syncBinanceTime(true).catch(() => {});
   if (TELEGRAM_BOT_TOKEN) {
     setInterval(pollTelegramUpdates, 4000);
