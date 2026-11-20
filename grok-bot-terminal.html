@@ -6,464 +6,760 @@
   <title>Grok Bot Terminal — 7-Agent Autonomous Trading Desk</title>
   <style>
     :root {
-      --bg: #0b0f17;
-      --panel: #121826;
-      --panel-2: #182032;
-      --border: #263147;
-      --text: #e6edf7;
-      --muted: #94a3b8;
-      --accent: #22c55e;
+      --bg: #070b14;
+      --panel: #0e1525;
+      --panel-2: #141e33;
+      --border: #1e2d4a;
+      --text: #e6eefc;
+      --muted: #8fa3c7;
+      --accent: #00d2ff;
+      --accent-2: #10b981;
       --warn: #f59e0b;
       --danger: #ef4444;
-      --info: #38bdf8;
     }
-    * { box-sizing: border-box; }
-    body {
+
+    * {
+      box-sizing: border-box;
       margin: 0;
-      font-family: system-ui, -apple-system, "Segoe UI", Tahoma, Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
+      padding: 0;
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
     }
-    header {
+
+    body {
+      background: radial-gradient(circle at top right, #101b33, var(--bg) 60%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 16px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .topbar {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 20px;
       display: flex;
       flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
       gap: 12px;
-      padding: 14px 18px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--border);
     }
-    .brand strong { display: block; font-size: 1.05rem; }
-    .brand span { font-size: 0.8rem; color: var(--muted); }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .brand h1 {
+      font-size: 1.25rem;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand p {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .badge {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+    }
+
+    .badge.ok {
+      color: var(--accent-2);
+      border-color: rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.1);
+    }
+
+    .badge.err {
+      color: var(--danger);
+      border-color: rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .badge.warn {
+      color: var(--warn);
+      border-color: rgba(245, 158, 11, 0.4);
+      background: rgba(245, 158, 11, 0.1);
+    }
+
     button {
+      cursor: pointer;
+      border: 1px solid var(--border);
       background: var(--panel-2);
       color: var(--text);
-      border: 1px solid var(--border);
-      padding: 10px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.9rem;
+      padding: 9px 14px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      transition: 0.2s ease;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, #0284c7, #00d2ff);
+      color: #04101d;
+      border: none;
       font-weight: 700;
     }
-    button.start-btn { background: #16a34a; border-color: #22c55e; color: #fff; }
-    button.stop-btn { background: #dc2626; border-color: #ef4444; color: #fff; }
-    button.accent { background: #0284c7; border-color: #38bdf8; color: #fff; }
-    button:disabled { opacity: 0.45; cursor: not-allowed; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
-    .trade-bar {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 10px;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px;
-      align-items: end;
+
+    button.success {
+      background: rgba(16, 185, 129, 0.18);
+      border-color: rgba(16, 185, 129, 0.5);
+      color: #6ee7b7;
     }
-    .telemetry {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 12px;
+
+    button.danger {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #fca5a5;
     }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
     .card {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px;
+      border-radius: 14px;
+      padding: 16px;
     }
-    .card .label { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
-    .card .value { font-size: 1.1rem; font-weight: 700; direction: ltr; text-align: right; }
-    .badge {
-      display: inline-block;
-      padding: 3px 9px;
-      border-radius: 999px;
-      font-size: 0.76rem;
-      font-weight: 700;
+
+    .card-title {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
     }
-    .ok { background: rgba(34,197,94,.16); color: #4ade80; }
-    .wait { background: rgba(245,158,11,.16); color: #fbbf24; }
-    .err { background: rgba(239,68,68,.16); color: #f87171; }
-    .grid-main { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; }
-    @media (max-width: 860px) { .grid-main { grid-template-columns: 1fr; } }
-    .agents-list { display: grid; gap: 10px; }
-    .agent-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+
+    .card-value {
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .card-sub {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+
+    label {
+      display: block;
+      font-size: 0.84rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 0.92rem;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .agents-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 10px;
+    }
+
+    .agent-box {
       background: var(--panel-2);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 10px 12px;
+      font-size: 0.84rem;
     }
-    .agent-meta strong { display: block; font-size: 0.92rem; }
-    .agent-meta span { font-size: 0.78rem; color: var(--muted); }
-    pre.log-box {
-      background: #070a10;
+
+    .agent-box strong {
+      display: block;
+      color: var(--accent);
+      margin-bottom: 2px;
+    }
+
+    .agent-box span {
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .status-banner {
+      background: var(--panel-2);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px;
-      min-height: 220px;
-      max-height: 360px;
-      overflow: auto;
-      font-size: 0.8rem;
-      color: #cbd5e1;
-      white-space: pre-wrap;
-      margin: 0;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 0.88rem;
+      color: var(--text);
+      margin-top: 12px;
+      word-break: break-word;
     }
-    label { font-size: 0.82rem; color: var(--muted); display: block; margin-bottom: 4px; }
-    input, select {
-      width: 100%; padding: 9px 10px; border-radius: 8px;
-      border: 1px solid var(--border); background: var(--bg); color: var(--text);
+
+    .error-banner {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.45);
+      color: #fecaca;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 0.88rem;
+      margin-top: 10px;
+      display: none;
+      word-break: break-word;
     }
-    .overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,.65);
-      display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px;
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 10px;
     }
-    .overlay.open { display: flex; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
+      background: var(--panel-2);
+      font-weight: 700;
+    }
+
+    /* معالج الجسر (Modal) */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 7, 18, 0.78);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 999;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
     .modal {
-      width: 100%; max-width: 460px; background: var(--panel);
-      border: 1px solid var(--border); border-radius: 14px; padding: 18px;
-      display: grid; gap: 12px;
+      width: 100%;
+      max-width: 540px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      display: grid;
+      gap: 14px;
     }
-    .drawer {
-      position: fixed; top: 0; left: 0; height: 100%; width: min(440px, 95vw);
-      background: var(--panel); border-right: 1px solid var(--border);
-      transform: translateX(-100%); transition: transform .2s ease;
-      z-index: 60; padding: 18px; overflow-y: auto; display: grid; gap: 12px; align-content: start;
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
     }
-    .drawer.open { transform: translateX(0); }
-    .audit-item {
-      background: var(--panel-2); border: 1px solid var(--border);
-      border-radius: 10px; padding: 10px; font-size: 0.82rem;
+
+    .modal-header h2 {
+      font-size: 1.05rem;
+      color: var(--accent);
+    }
+
+    .modal-footer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 6px;
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="brand">
-      <strong>Grok Bot Terminal — 7-Agent Desk</strong>
-      <span>SPEC_ID: DESK-EVM-BINANCE-001 | تداول آلي مباشر بالرصيد الفعلي</span>
-    </div>
-    <div class="actions">
-      <button class="start-btn" id="startTradeBtn" onclick="startTrading()">▶ بدء التداول الآلي</button>
-      <button class="stop-btn" id="stopTradeBtn" onclick="stopTrading()" disabled>■ إيقاف التداول</button>
-      <button class="accent" onclick="openWizard()">معالج الجسر</button>
-      <button onclick="toggleDrawer(true)">سجل التدقيق</button>
-    </div>
-  </header>
+  <div class="container">
+    <!-- الشريط العلوي -->
+    <header class="topbar">
+      <div class="brand">
+        <h1>⚡ Grok Bot Terminal — غرفة التداول الآلي</h1>
+        <p>الاعتماد على رصيد USDT الفعلي فقط • نسبة مخاطرة 0.02 • بدون سقف ثابت 10$</p>
+      </div>
+      <div class="top-actions">
+        <span id="bridgeBadge" class="badge warn">جاري الفحص...</span>
+        <button id="openWizardBtn" class="primary">🔌 معالج الجسر</button>
+        <button id="refreshBalanceBtn" class="success">💰 تحديث رصيد بايننس</button>
+      </div>
+    </header>
 
-  <main class="container">
-    <section class="trade-bar">
-      <div>
-        <label>زوج التداول (Symbol)</label>
-        <select id="symbolSelect">
-          <option value="BTCUSDT" selected>BTC/USDT</option>
-          <option value="ETHUSDT">ETH/USDT</option>
-          <option value="SOLUSDT">SOL/USDT</option>
-          <option value="BNBUSDT">BNB/USDT</option>
-          <option value="XRPUSDT">XRP/USDT</option>
-        </select>
+    <!-- بطاقات المؤشرات -->
+    <section class="grid-4">
+      <div class="card">
+        <div class="card-title">الرصيد الفعلي المتاح (USDT)</div>
+        <div id="usdtFreeVal" class="card-value">-- USDT</div>
+        <div id="usdtLockedVal" class="card-sub">المحجوز: -- USDT</div>
       </div>
-      <div>
-        <label>مصدر رأس المال</label>
-        <input type="text" value="الرصيد الفعلي في بايننس فقط" readonly />
+
+      <div class="card">
+        <div class="card-title">قيمة الصفقة المحسوبة تلقائياً</div>
+        <div id="orderNotionalVal" class="card-value">-- USDT</div>
+        <div id="riskFormulaSub" class="card-sub">الرصيد الفعلي × المخاطرة (0.02)</div>
       </div>
-      <div>
-        <label>وضع التنفيذ</label>
-        <select id="quickMode">
-          <option value="live" selected>تداول حقيقي (LIVE)</option>
-          <option value="paper">محاكاة (PAPER)</option>
-        </select>
+
+      <div class="card">
+        <div class="card-title">حالة المحرك والزوج</div>
+        <div id="botRunVal" class="card-value">متوقف</div>
+        <div id="botSymbolSub" class="card-sub">الزوج: BTCUSDT • الوضع: live</div>
       </div>
-      <div style="display:grid; gap:6px;">
-        <button style="width:100%;" onclick="pingBridge()">فحص اتصال الجسر</button>
-        <button style="width:100%;" onclick="refreshBalance()">تحديث رصيد بايننس</button>
+
+      <div class="card">
+        <div class="card-title">الصفقات المنفذة</div>
+        <div id="tradesCountVal" class="card-value">0</div>
+        <div id="bridgeUrlSub" class="card-sub">الجسر: غير مضبوط</div>
       </div>
     </section>
 
-    <section class="telemetry">
-      <div class="card">
-        <div class="label">الرصيد الفعلي (Binance USDT)</div>
-        <div class="value" id="balanceVal">-- USDT</div>
-      </div>
-      <div class="card">
-        <div class="label">حالة الجسر (Bridge)</div>
-        <div class="value" style="text-align:right;"><span id="bridgeStatus" class="badge wait">بانتظار الفحص</span></div>
-      </div>
-      <div class="card">
-        <div class="label">حالة البوت الآلي</div>
-        <div class="value" style="text-align:right;"><span id="botRunBadge" class="badge err">متوقف</span></div>
-      </div>
-      <div class="card">
-        <div class="label">مخاطرة الصفقة</div>
-        <div class="value" id="riskVal">0.02 (2%)</div>
+    <!-- الوكلاء السبعة -->
+    <section class="card">
+      <div class="card-title" style="margin-bottom: 10px;">منظومة الوكلاء السبعة (DESK-EVM-BINANCE-001)</div>
+      <div class="agents-grid">
+        <div class="agent-box"><strong>1. Flow Scout</strong><span>مراقبة حركة السعر والتغير</span></div>
+        <div class="agent-box"><strong>2. Wallet Analyst</strong><span>قراءة رصيد USDT الفعلي</span></div>
+        <div class="agent-box"><strong>3. Liquidity Analyst</strong><span>قياس سيولة الزوج 24 ساعة</span></div>
+        <div class="agent-box"><strong>4. Strategy Lead</strong><span>تقييم شروط الدخول</span></div>
+        <div class="agent-box"><strong>5. Risk Officer</strong><span>مخاطرة 0.02 من الرصيد الفعلي</span></div>
+        <div class="agent-box"><strong>6. Execution Engineer</strong><span>تنفيذ الأوامر عبر الجسر</span></div>
+        <div class="agent-box"><strong>7. Independent Reviewer</strong><span>مراجعة وتوثيق السجل</span></div>
       </div>
     </section>
 
-    <div class="grid-main">
-      <section class="card">
-        <h3 style="margin:0 0 12px 0; font-size:1rem;">الوكلاء السبعة المستقلون</h3>
-        <div class="agents-list" id="agentsContainer"></div>
-      </section>
-
-      <section class="card">
-        <h3 style="margin:0 0 8px 0; font-size:1rem;">القياس الحي وسجل التداول</h3>
-        <div style="font-size:0.78rem; color:var(--muted); margin-bottom:8px; direction:ltr;" id="bridgeUrlDisplay">
-          https://grok-bot-binance-bridge-2.onrender.com
+    <!-- لوحة التحكم بالتداول -->
+    <section class="card">
+      <div class="controls-grid">
+        <div>
+          <label for="symbolInput">زوج التداول</label>
+          <input id="symbolInput" type="text" value="BTCUSDT" />
         </div>
-        <pre class="log-box" id="logBox"></pre>
-      </section>
-    </div>
-  </main>
+        <div>
+          <label for="riskInput">نسبة المخاطرة من الرصيد الفعلي</label>
+          <input id="riskInput" type="number" step="0.005" min="0.001" max="1" value="0.02" />
+        </div>
+        <div>
+          <label for="modeSelect">وضع التشغيل</label>
+          <select id="modeSelect">
+            <option value="live" selected>live (تنفيذ حقيقي)</option>
+            <option value="testnet">testnet (تجريبي)</option>
+            <option value="paper">paper (محاكاة)</option>
+          </select>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button id="startBtn" class="success" style="flex: 1;">▶️ بدء التداول</button>
+          <button id="stopBtn" class="danger" style="flex: 1;">⏹️ إيقاف</button>
+        </div>
+      </div>
 
-  <div class="overlay" id="wizardModal">
+      <div id="lastActionBanner" class="status-banner">آخر إجراء: بانتظار الاتصال بالجسر...</div>
+      <div id="errorBanner" class="error-banner"></div>
+    </section>
+
+    <!-- سجل التدقيق -->
+    <section class="card">
+      <div class="card-title">سجل دورات الفحص والتنفيذ (Audit Log)</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>الوقت</th>
+              <th>الزوج</th>
+              <th>السعر</th>
+              <th>الرصيد الفعلي (USDT)</th>
+              <th>قيمة الصفقة (USDT)</th>
+              <th>القرار</th>
+              <th>التفاصيل</th>
+            </tr>
+          </thead>
+          <tbody id="auditsBody">
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--muted);">لا توجد سجلات بعد</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- نافذة معالج الجسر -->
+  <div id="wizardModal" class="modal-backdrop">
     <div class="modal">
-      <h3 style="margin:0;">إعدادات رابط الجسر (Render)</h3>
-      <div>
-        <label>رابط خدمة Render</label>
-        <input type="url" id="inputBridgeUrl" value="https://grok-bot-binance-bridge-2.onrender.com" />
+      <div class="modal-header">
+        <h2>🔌 معالج الجسر (Bridge Connection Wizard)</h2>
+        <button id="closeWizardBtn">✕</button>
       </div>
+
       <div>
-        <label>نسبة المخاطرة لكل صفقة</label>
-        <input type="number" id="inputRisk" value="0.02" step="0.005" />
+        <label for="bridgeUrlInput">رابط الجسر (بدون / في النهاية)</label>
+        <input
+          id="bridgeUrlInput"
+          type="url"
+          placeholder="https://your-bridge-service.up.railway.app"
+        />
+        <div class="card-sub">
+          الصق رابط الجسر الجديد (`https://...`) ثم اضغط **حفظ وفحص** للاتصال وقراءة الرصيد الفعلي.
+        </div>
       </div>
-      <div style="display:flex; gap:8px; justify-content:flex-end;">
-        <button onclick="closeWizard()">إغلاق</button>
-        <button class="start-btn" onclick="saveWizard()">حفظ وفحص</button>
+
+      <div>
+        <label for="wizardRiskInput">نسبة المخاطرة الافتراضية من الرصيد الفعلي</label>
+        <input
+          id="wizardRiskInput"
+          type="number"
+          step="0.005"
+          min="0.001"
+          max="1"
+          value="0.02"
+        />
+      </div>
+
+      <div id="wizardTestResult" class="status-banner">
+        حالة الفحص: لم يتم الفحص بعد.
+      </div>
+
+      <div class="modal-footer">
+        <button id="saveAndCheckBtn" class="primary">💾 حفظ وفحص</button>
       </div>
     </div>
   </div>
 
-  <aside class="drawer" id="auditDrawer">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h3 style="margin:0;">سجل صفقات وتدقيق الوكلاء</h3>
-      <button onclick="toggleDrawer(false)">إغلاق</button>
-    </div>
-    <div id="auditList"></div>
-  </aside>
-
   <script>
-    const AGENTS = [
-      { id: "flow_scout", name: "Flow Scout", role: "رصد تدفق السيولة والأوامر" },
-      { id: "wallet_analyst", name: "Wallet Analyst", role: "فحص رصيد USDT الفعلي في بايننس" },
-      { id: "liquidity_analyst", name: "Liquidity Analyst", role: "فحص عمق السوق والانزلاق السعري" },
-      { id: "strategy_lead", name: "Strategy Lead", role: "توليد إشارة الدخول" },
-      { id: "risk_officer", name: "Risk Officer", role: "احتساب المخاطرة من الرصيد الفعلي فقط" },
-      { id: "execution_engineer", name: "Execution Engineer", role: "إرسال أمر الشراء/البيع إلى بايننس" },
-      { id: "independent_reviewer", name: "Independent Reviewer", role: "مراجعة واعتماد سجل التدقيق" }
-    ];
+    const STORAGE_KEY = "grok_bot_bridge_url_v1";
+    const RISK_STORAGE_KEY = "grok_bot_max_risk_v1";
 
-    const DEFAULT_BRIDGE_URL = "https://grok-bot-binance-bridge-2.onrender.com";
-
-    const state = {
-      bridgeUrl: (localStorage.getItem("grok_bridge_url") || DEFAULT_BRIDGE_URL).trim().replace(/\/+$/, ""),
-      maxRisk: Number(localStorage.getItem("grok_risk") || 0.02)
+    const els = {
+      bridgeBadge: document.getElementById("bridgeBadge"),
+      openWizardBtn: document.getElementById("openWizardBtn"),
+      closeWizardBtn: document.getElementById("closeWizardBtn"),
+      wizardModal: document.getElementById("wizardModal"),
+      bridgeUrlInput: document.getElementById("bridgeUrlInput"),
+      wizardRiskInput: document.getElementById("wizardRiskInput"),
+      wizardTestResult: document.getElementById("wizardTestResult"),
+      saveAndCheckBtn: document.getElementById("saveAndCheckBtn"),
+      refreshBalanceBtn: document.getElementById("refreshBalanceBtn"),
+      usdtFreeVal: document.getElementById("usdtFreeVal"),
+      usdtLockedVal: document.getElementById("usdtLockedVal"),
+      orderNotionalVal: document.getElementById("orderNotionalVal"),
+      riskFormulaSub: document.getElementById("riskFormulaSub"),
+      botRunVal: document.getElementById("botRunVal"),
+      botSymbolSub: document.getElementById("botSymbolSub"),
+      tradesCountVal: document.getElementById("tradesCountVal"),
+      bridgeUrlSub: document.getElementById("bridgeUrlSub"),
+      symbolInput: document.getElementById("symbolInput"),
+      riskInput: document.getElementById("riskInput"),
+      modeSelect: document.getElementById("modeSelect"),
+      startBtn: document.getElementById("startBtn"),
+      stopBtn: document.getElementById("stopBtn"),
+      lastActionBanner: document.getElementById("lastActionBanner"),
+      errorBanner: document.getElementById("errorBanner"),
+      auditsBody: document.getElementById("auditsBody")
     };
 
-    let pollTimer = null;
+    let currentUsdtFree = null;
 
-    function log(msg) {
-      const el = document.getElementById("logBox");
-      if (!el) return;
-      const time = new Date().toLocaleTimeString("ar-EG");
-      el.textContent += `[${time}] ${msg}\n`;
-      el.scrollTop = el.scrollHeight;
+    function normalizeUrl(raw) {
+      return String(raw || "").trim().replace(/\/+$/, "");
     }
 
-    async function fetchWithRetry(url, options = {}, retries = 2, timeoutMs = 65000) {
-      for (let attempt = 0; attempt <= retries; attempt++) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
-        try {
-          const res = await fetch(url, {
-            ...options,
-            cache: "no-store",
-            signal: controller.signal
-          });
-          clearTimeout(timer);
-          return res;
-        } catch (err) {
-          clearTimeout(timer);
-          const isLast = attempt === retries;
-          const reason = err.name === "AbortError" ? "انتهت مهلة الاستيقاظ (65s)" : err.message;
-          log(`محاولة ${attempt + 1}/${retries + 1} فشلت (${url}): ${reason}`);
-          if (isLast) throw new Error(reason);
-          await new Promise(r => setTimeout(r, 2500));
-        }
+    function getBridgeUrl() {
+      return normalizeUrl(localStorage.getItem(STORAGE_KEY) || "");
+    }
+
+    function getRiskValue() {
+      const saved = parseFloat(localStorage.getItem(RISK_STORAGE_KEY));
+      const inputVal = parseFloat(els.riskInput.value);
+      const val = !Number.isNaN(inputVal) && inputVal > 0 ? inputVal : (!Number.isNaN(saved) && saved > 0 ? saved : 0.02);
+      return Math.max(0.001, Math.min(1, val));
+    }
+
+    function showError(msg) {
+      if (!msg) {
+        els.errorBanner.style.display = "none";
+        els.errorBanner.textContent = "";
+        return;
       }
+      els.errorBanner.style.display = "block";
+      els.errorBanner.textContent = `⚠️ ${msg}`;
     }
 
-    function renderAgents(active) {
-      const box = document.getElementById("agentsContainer");
-      if (!box) return;
-      box.innerHTML = AGENTS.map(a => `
-        <div class="agent-row">
-          <div class="agent-meta">
-            <strong>${a.name}</strong>
-            <span>${a.role}</span>
-          </div>
-          <span class="badge ${active ? "ok" : "wait"}">${active ? "نشط" : "جاهز"}</span>
-        </div>
-      `).join("");
-    }
-
-    function updateUIState(serverState) {
-      if (!serverState) return;
-      const running = Boolean(serverState.running);
-      document.getElementById("startTradeBtn").disabled = running;
-      document.getElementById("stopTradeBtn").disabled = !running;
-
-      if (typeof serverState.usdtFree === "number") {
-        document.getElementById("balanceVal").textContent = `${serverState.usdtFree.toFixed(2)} USDT`;
+    function updateComputedOrderCard() {
+      const risk = getRiskValue();
+      els.riskFormulaSub.textContent = `الرصيد الفعلي × المخاطرة (${risk})`;
+      if (currentUsdtFree === null || Number.isNaN(currentUsdtFree)) {
+        els.orderNotionalVal.textContent = "-- USDT";
+        return;
       }
+      const notional = (currentUsdtFree * risk).toFixed(2);
+      els.orderNotionalVal.textContent = `${notional} USDT`;
+    }
 
-      const botBadge = document.getElementById("botRunBadge");
-      botBadge.className = `badge ${running ? "ok" : "err"}`;
-      botBadge.textContent = running ? `يعمل (${serverState.symbol})` : "متوقف";
+    function renderState(state, keysConfigured = false) {
+      const url = getBridgeUrl();
+      els.bridgeUrlSub.textContent = url ? `الجسر: ${url}` : "الجسر: غير مضبوط";
 
-      const riskVal = serverState.maxRisk || state.maxRisk;
-      document.getElementById("riskVal").textContent = `${riskVal} (${(riskVal * 100).toFixed(1)}%)`;
-      renderAgents(running);
-
-      const auditList = document.getElementById("auditList");
-      const audits = serverState.audits || [];
-      if (!audits.length) {
-        auditList.innerHTML = `<div style="color:var(--muted); font-size:0.85rem;">لا توجد عمليات مسجلة بعد.</div>`;
+      if (!url) {
+        els.bridgeBadge.className = "badge warn";
+        els.bridgeBadge.textContent = "يرجى ضبط رابط الجسر";
+      } else if (state?.lastError) {
+        els.bridgeBadge.className = "badge err";
+        els.bridgeBadge.textContent = "متصل — تنبيه من الجسر";
+        showError(state.lastError);
       } else {
-        auditList.innerHTML = audits.map(a => `
-          <div class="audit-item">
-            <div><strong>${a.time} — ${a.symbol}</strong> | السعر: ${a.price}</div>
-            <div>الرصيد الفعلي: ${a.usdtFree} USDT</div>
-            <div style="color:#4ade80; margin-top:4px;">${a.decision}</div>
-            <div style="color:var(--muted); font-size:0.78rem;">${a.detail}</div>
-          </div>
-        `).join("");
+        els.bridgeBadge.className = "badge ok";
+        els.bridgeBadge.textContent = keysConfigured ? "متصل + مفاتيح جاهزة" : "متصل بالجسر";
+        showError("");
+      }
+
+      if (typeof state?.usdtFree === "number") {
+        currentUsdtFree = state.usdtFree;
+        els.usdtFreeVal.textContent = `${state.usdtFree.toFixed(2)} USDT`;
+      }
+
+      if (typeof state?.usdtLocked === "number") {
+        els.usdtLockedVal.textContent = `المحجوز: ${state.usdtLocked.toFixed(2)} USDT`;
+      }
+
+      if (typeof state?.maxRisk === "number" && state.maxRisk > 0) {
+        els.riskInput.value = state.maxRisk;
+        els.wizardRiskInput.value = state.maxRisk;
+        localStorage.setItem(RISK_STORAGE_KEY, String(state.maxRisk));
+      }
+
+      updateComputedOrderCard();
+
+      els.botRunVal.textContent = state?.running ? "يعمل" : "متوقف";
+      els.botRunVal.style.color = state?.running ? "var(--accent-2)" : "var(--warn)";
+      els.botSymbolSub.textContent = `الزوج: ${state?.symbol || els.symbolInput.value} • الوضع: ${state?.mode || els.modeSelect.value}`;
+      els.tradesCountVal.textContent = String(state?.tradesCount ?? 0);
+      els.lastActionBanner.textContent = `آخر إجراء: ${state?.lastAction || "جاهز"}`;
+
+      const audits = Array.isArray(state?.audits) ? state.audits : [];
+      if (audits.length === 0) {
+        els.auditsBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--muted);">لا توجد سجلات بعد</td></tr>`;
+      } else {
+        els.auditsBody.innerHTML = audits
+          .map(row => `
+            <tr>
+              <td>${row.time || "--"}</td>
+              <td>${row.symbol || "--"}</td>
+              <td>${row.price ?? "--"}</td>
+              <td>${typeof row.usdtFree === "number" ? row.usdtFree.toFixed(2) : "--"}</td>
+              <td>${typeof row.orderNotional === "number" ? row.orderNotional.toFixed(2) : "--"}</td>
+              <td>${row.decision || "--"}</td>
+              <td>${row.detail || "--"}</td>
+            </tr>
+          `)
+          .join("");
       }
     }
 
-    async function pingBridge() {
-      const badge = document.getElementById("bridgeStatus");
-      badge.className = "badge wait";
-      badge.textContent = "جاري الإيقاظ والاتصال...";
-      log(`الاتصال بالجسر: ${state.bridgeUrl}/health (مهلة حتى 65 ثانية)...`);
+    async function checkHealthAndStatus() {
+      const url = getBridgeUrl();
+      if (!url) {
+        renderState(null, false);
+        return;
+      }
+
       try {
-        const res = await fetchWithRetry(`${state.bridgeUrl}/health`);
+        const res = await fetch(`${url}/health`);
         const data = await res.json();
-        if (res.ok && data.ok) {
-          badge.className = "badge ok";
-          badge.textContent = data.keysConfigured ? "متصل + مفاتيح جاهزة" : "متصل (بدون مفاتيح)";
-          log(`الجسر متصل بنجاح | المفاتيح: ${data.keysConfigured ? "مفعلة" : "غير مضبوطة"}`);
-          if (data.state && data.state.lastError) {
-            log(`⚠️ تنبيه من بايننس: ${data.state.lastError}`);
-          }
-          updateUIState(data.state);
-          if (data.keysConfigured && (!data.state || typeof data.state.usdtFree !== "number")) {
-            await refreshBalance();
-          }
-        } else {
-          badge.className = "badge err";
-          badge.textContent = `خطأ (${res.status})`;
-          log(`استجابة غير متوقعة: ${JSON.stringify(data)}`);
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `HTTP ${res.status}`);
         }
+        renderState(data.state, Boolean(data.keysConfigured));
       } catch (err) {
-        badge.className = "badge err";
-        badge.textContent = "تعذر الاتصال";
-        log(`❌ تعذر الوصول للجسر: ${err.message}`);
+        els.bridgeBadge.className = "badge err";
+        els.bridgeBadge.textContent = "تعذر الاتصال بالجسر";
+        showError(`فشل الاتصال بالجسر (${url}): ${err.message}`);
       }
     }
 
     async function refreshBalance() {
-      log("جاري جلب الرصيد الفعلي من Binance...");
+      const url = getBridgeUrl();
+      if (!url) {
+        els.wizardModal.classList.add("open");
+        return;
+      }
+
       try {
-        const res = await fetchWithRetry(`${state.bridgeUrl}/api/balance`);
+        const res = await fetch(`${url}/api/balance`);
         const data = await res.json();
-        if (res.ok && data.ok) {
-          document.getElementById("balanceVal").textContent = `${Number(data.usdtFree).toFixed(2)} USDT`;
-          log(`✅ الرصيد المتاح في Binance: ${data.usdtFree} USDT (محجوز: ${data.usdtLocked} USDT)`);
-        } else {
-          log(`❌ تعذر جلب الرصيد: ${data.error || "خطأ من بايننس"}`);
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `HTTP ${res.status}`);
         }
+        if (typeof data.usdtFree === "number") {
+          currentUsdtFree = data.usdtFree;
+          els.usdtFreeVal.textContent = `${data.usdtFree.toFixed(2)} USDT`;
+        }
+        if (typeof data.usdtLocked === "number") {
+          els.usdtLockedVal.textContent = `المحجوز: ${data.usdtLocked.toFixed(2)} USDT`;
+        }
+        updateComputedOrderCard();
+        showError("");
+        await checkHealthAndStatus();
       } catch (err) {
-        log(`❌ خطأ اتصال عند جلب الرصيد: ${err.message}`);
+        showError(`تعذر تحديث رصيد بايننس: ${err.message}`);
       }
     }
 
     async function startTrading() {
-      const symbol = document.getElementById("symbolSelect").value;
-      const mode = document.getElementById("quickMode").value;
+      const url = getBridgeUrl();
+      if (!url) {
+        els.wizardModal.classList.add("open");
+        return;
+      }
 
-      log(`إرسال أمر بدء التداول الآلي على ${symbol} بالرصيد الفعلي فقط (${mode.toUpperCase()})...`);
+      const payload = {
+        symbol: (els.symbolInput.value || "BTCUSDT").toUpperCase().trim(),
+        maxRisk: getRiskValue(),
+        mode: els.modeSelect.value,
+        useRealBalanceOnly: true
+      };
+
       try {
-        const res = await fetchWithRetry(`${state.bridgeUrl}/api/trade/start`, {
+        const res = await fetch(`${url}/api/trade/start`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ symbol, maxRisk: state.maxRisk, mode })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
-        if (data.ok) {
-          log(`✅ ${data.message}: ${data.state.lastAction}`);
-          if (data.state.lastError) log(`⚠️ تنبيه من بايننس: ${data.state.lastError}`);
-          updateUIState(data.state);
-          if (pollTimer) clearInterval(pollTimer);
-          pollTimer = setInterval(syncStatus, 15000);
-        } else {
-          log(`❌ فشل البدء: ${data.error || "خطأ غير معروف"}`);
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `HTTP ${res.status}`);
         }
+        renderState(data.state, true);
       } catch (err) {
-        log(`❌ خطأ اتصال عند البدء: ${err.message}`);
+        showError(`تعذر بدء التداول: ${err.message}`);
       }
     }
 
     async function stopTrading() {
-      log("إرسال أمر إيقاف التداول الآلي...");
+      const url = getBridgeUrl();
+      if (!url) return;
+
       try {
-        const res = await fetchWithRetry(`${state.bridgeUrl}/api/trade/stop`, { method: "POST" });
+        const res = await fetch(`${url}/api/trade/stop`, { method: "POST" });
         const data = await res.json();
-        if (data.ok) {
-          log(`🛑 ${data.message}`);
-          updateUIState(data.state);
-          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `HTTP ${res.status}`);
         }
+        renderState(data.state, true);
       } catch (err) {
-        log(`❌ خطأ عند الإيقاف: ${err.message}`);
+        showError(`تعذر إيقاف التداول: ${err.message}`);
       }
     }
 
-    async function syncStatus() {
+    // أحداث معالج الجسر
+    els.openWizardBtn.addEventListener("click", () => {
+      els.bridgeUrlInput.value = getBridgeUrl();
+      els.wizardRiskInput.value = String(getRiskValue());
+      els.wizardTestResult.textContent = "حالة الفحص: أدخل رابط الجسر واضغط حفظ وفحص.";
+      els.wizardModal.classList.add("open");
+    });
+
+    els.closeWizardBtn.addEventListener("click", () => {
+      els.wizardModal.classList.remove("open");
+    });
+
+    els.saveAndCheckBtn.addEventListener("click", async () => {
+      const cleanUrl = normalizeUrl(els.bridgeUrlInput.value);
+      const riskVal = Math.max(0.001, Math.min(1, parseFloat(els.wizardRiskInput.value) || 0.02));
+
+      if (!cleanUrl.startsWith("https://") && !cleanUrl.startsWith("http://")) {
+        els.wizardTestResult.textContent = "❌ يرجى إدخال رابط صحيح يبدأ بـ https://";
+        return;
+      }
+
+      localStorage.setItem(STORAGE_KEY, cleanUrl);
+      localStorage.setItem(RISK_STORAGE_KEY, String(riskVal));
+      els.riskInput.value = String(riskVal);
+      updateComputedOrderCard();
+
+      els.wizardTestResult.textContent = "⏳ جاري فحص الاتصال بالجسر...";
+
       try {
-        const res = await fetchWithRetry(`${state.bridgeUrl}/api/status`, {}, 1, 30000);
+        const res = await fetch(`${cleanUrl}/health`);
         const data = await res.json();
-        if (data.ok && data.state) {
-          updateUIState(data.state);
-          log(`تحديث دوري: ${data.state.lastAction}`);
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `HTTP ${res.status}`);
         }
-      } catch (_) {}
-    }
+        els.wizardTestResult.textContent =
+          `✅ تم الاتصال بنجاح | المفاتيح مضبوطة: ${data.keysConfigured ? "نعم" : "لا"} | تليجرام: ${data.telegramConfigured ? "نعم" : "لا"}`;
+        renderState(data.state, Boolean(data.keysConfigured));
+        setTimeout(() => {
+          els.wizardModal.classList.remove("open");
+        }, 900);
+      } catch (err) {
+        els.wizardTestResult.textContent = `❌ فشل الفحص: ${err.message}`;
+        showError(err.message);
+      }
+    });
 
-    function openWizard() {
-      document.getElementById("inputBridgeUrl").value = state.bridgeUrl;
-      document.getElementById("inputRisk").value = state.maxRisk;
-      document.getElementById("wizardModal").classList.add("open");
-    }
-    function closeWizard() { document.getElementById("wizardModal").classList.remove("open"); }
-    function saveWizard() {
-      state.bridgeUrl = (document.getElementById("inputBridgeUrl").value || DEFAULT_BRIDGE_URL).trim().replace(/\/+$/, "");
-      state.maxRisk = Number(document.getElementById("inputRisk").value) || 0.02;
-      localStorage.setItem("grok_bridge_url", state.bridgeUrl);
-      localStorage.setItem("grok_risk", state.maxRisk);
-      document.getElementById("bridgeUrlDisplay").textContent = state.bridgeUrl;
-      closeWizard();
-      pingBridge();
-    }
-    function toggleDrawer(open) { document.getElementById("auditDrawer").classList.toggle("open", open); }
+    els.refreshBalanceBtn.addEventListener("click", refreshBalance);
+    els.startBtn.addEventListener("click", startTrading);
+    els.stopBtn.addEventListener("click", stopTrading);
+    els.riskInput.addEventListener("input", () => {
+      localStorage.setItem(RISK_STORAGE_KEY, String(getRiskValue()));
+      updateComputedOrderCard();
+    });
 
-    document.getElementById("bridgeUrlDisplay").textContent = state.bridgeUrl;
-    renderAgents(false);
-    pingBridge();
+    // تهيئة أولية
+    (function init() {
+      const savedRisk = parseFloat(localStorage.getItem(RISK_STORAGE_KEY));
+      if (!Number.isNaN(savedRisk) && savedRisk > 0) {
+        els.riskInput.value = String(savedRisk);
+        els.wizardRiskInput.value = String(savedRisk);
+      }
+      els.bridgeUrlInput.value = getBridgeUrl();
+      updateComputedOrderCard();
+      checkHealthAndStatus();
+      setInterval(checkHealthAndStatus, 15000);
+    })();
   </script>
 </body>
 </html>
