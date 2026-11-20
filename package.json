@@ -1,18 +1,12 @@
 {
   "name": "grok-bot-binance-bridge",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Grok Bot Terminal Binance Bridge for SPEC_ID DESK-EVM-BINANCE-001",
   "main": "binance-bridge.js",
   "scripts": {
     "start": "node binance-bridge.js"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2"
   },
   "engines": {
     "node": ">=18.0.0"
   }
 }
-
