@@ -157,7 +157,6 @@
   </header>
 
   <main class="container">
-    <!-- شريط إعداد الصفقة السريع -->
     <section class="trade-bar">
       <div>
         <label>زوج التداول (Symbol)</label>
@@ -180,12 +179,17 @@
           <option value="paper">محاكاة (PAPER)</option>
         </select>
       </div>
-      <div>
+      <div style="display:grid; gap:6px;">
         <button style="width:100%;" onclick="pingBridge()">فحص اتصال الجسر</button>
+        <button style="width:100%;" onclick="refreshBalance()">تحديث رصيد بايننس</button>
       </div>
     </section>
 
     <section class="telemetry">
+      <div class="card">
+        <div class="label">الرصيد الفعلي (Binance USDT)</div>
+        <div class="value" id="balanceVal">-- USDT</div>
+      </div>
       <div class="card">
         <div class="label">حالة الجسر (Bridge)</div>
         <div class="value" style="text-align:right;"><span id="bridgeStatus" class="badge wait">بانتظار الفحص</span></div>
@@ -249,7 +253,7 @@
   <script>
     const AGENTS = [
       { id: "flow_scout", name: "Flow Scout", role: "رصد تدفق السيولة والأوامر" },
-      { id: "wallet_analyst", name: "Wallet Analyst", role: "فحص رصيد USDT في بايننس" },
+      { id: "wallet_analyst", name: "Wallet Analyst", role: "فحص رصيد USDT الفعلي في بايننس" },
       { id: "liquidity_analyst", name: "Liquidity Analyst", role: "فحص عمق السوق والانزلاق السعري" },
       { id: "strategy_lead", name: "Strategy Lead", role: "توليد إشارة الدخول" },
       { id: "risk_officer", name: "Risk Officer", role: "تطبيق حد 10 USDT ومخاطرة 0.02" },
@@ -290,6 +294,10 @@
       document.getElementById("startTradeBtn").disabled = running;
       document.getElementById("stopTradeBtn").disabled = !running;
 
+      if (typeof serverState.usdtFree === "number") {
+        document.getElementById("balanceVal").textContent = `${serverState.usdtFree.toFixed(2)} USDT`;
+      }
+
       const botBadge = document.getElementById("botRunBadge");
       botBadge.className = `badge ${running ? "ok" : "err"}`;
       botBadge.textContent = running ? `يعمل (${serverState.symbol})` : "متوقف";
@@ -306,7 +314,7 @@
         auditList.innerHTML = audits.map(a => `
           <div class="audit-item">
             <div><strong>${a.time} — ${a.symbol}</strong> | السعر: ${a.price}</div>
-            <div>الرصيد المتاح: ${a.usdtFree} USDT</div>
+            <div>الرصيد الفعلي: ${a.usdtFree} USDT</div>
             <div style="color:#4ade80; margin-top:4px;">${a.decision}</div>
             <div style="color:var(--muted); font-size:0.78rem;">${a.detail}</div>
           </div>
@@ -325,7 +333,10 @@
         if (res.ok && data.ok) {
           badge.className = "badge ok";
           badge.textContent = data.keysConfigured ? "متصل + مفاتيح جاهزة" : "متصل (بدون مفاتيح)";
-          log(`الجسر متصل بنجاح | المفاتيح: ${data.keysConfigured ? "مفعلة" : "غير مضبوطة"} | آخر حالة: ${data.state.lastAction}`);
+          log(`الجسر متصل بنجاح | المفاتيح: ${data.keysConfigured ? "مفعلة" : "غير مضبوطة"}`);
+          if (data.state && data.state.lastError) {
+            log(`⚠️ رسالة من بايننس: ${data.state.lastError}`);
+          }
           updateUIState(data.state);
         } else {
           badge.className = "badge err";
@@ -336,6 +347,22 @@
         badge.className = "badge err";
         badge.textContent = "تعذر الاتصال";
         log(`تعذر الوصول للجسر: ${err.message}`);
+      }
+    }
+
+    async function refreshBalance() {
+      log("جاري جلب الرصيد الفعلي من Binance...");
+      try {
+        const res = await fetch(`${state.bridgeUrl}/api/balance`);
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          document.getElementById("balanceVal").textContent = `${Number(data.usdtFree).toFixed(2)} USDT`;
+          log(`✅ الرصيد المتاح في Binance: ${data.usdtFree} USDT (محجوز: ${data.usdtLocked} USDT)`);
+        } else {
+          log(`❌ تعذر جلب الرصيد: ${data.error || "خطأ من بايننس"}`);
+        }
+      } catch (err) {
+        log(`❌ خطأ اتصال عند جلب الرصيد: ${err.message}`);
       }
     }
 
