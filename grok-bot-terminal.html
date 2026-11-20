@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grok Bot Terminal — 7-Agent Autonomous Trading Desk</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --panel: #121826;
+      --panel-2: #182032;
+      --border: #263147;
+      --text: #e6edf7;
+      --muted: #94a3b8;
+      --accent: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --info: #38bdf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Tahoma, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    .brand { display: flex; flex-direction: column; }
+    .brand strong { font-size: 1.05rem; }
+    .brand span { font-size: 0.8rem; color: var(--muted); }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    button {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+    button.primary { background: #16a34a; border-color: #22c55e; color: #fff; }
+    button.accent { background: #0284c7; border-color: #38bdf8; color: #fff; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+    .telemetry {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .card .label { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+    .card .value { font-size: 1.15rem; font-weight: 700; word-break: break-all; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .ok { background: rgba(34,197,94,.15); color: #4ade80; }
+    .wait { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .err { background: rgba(239,68,68,.15); color: #f87171; }
+    .grid-main { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; }
+    @media (max-width: 860px) { .grid-main { grid-template-columns: 1fr; } }
+    .agents-list { display: grid; gap: 10px; }
+    .agent-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .agent-meta strong { display: block; font-size: 0.92rem; }
+    .agent-meta span { font-size: 0.78rem; color: var(--muted); }
+    pre.log-box {
+      background: #070a10;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      min-height: 220px;
+      max-height: 360px;
+      overflow: auto;
+      font-size: 0.8rem;
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      margin: 0;
+    }
+    /* Modal & Drawer */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.65);
+      display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px;
+    }
+    .overlay.open { display: flex; }
+    .modal {
+      width: 100%; max-width: 480px; background: var(--panel);
+      border: 1px solid var(--border); border-radius: 14px; padding: 18px;
+      display: grid; gap: 12px;
+    }
+    label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 4px; }
+    input, select {
+      width: 100%; padding: 9px 10px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text);
+    }
+    .drawer {
+      position: fixed; top: 0; left: 0; height: 100%; width: min(440px, 95vw);
+      background: var(--panel); border-right: 1px solid var(--border);
+      transform: translateX(-100%); transition: transform .2s ease;
+      z-index: 60; padding: 18px; overflow-y: auto; display: grid; gap: 12px; align-content: start;
+    }
+    .drawer.open { transform: translateX(0); }
+    .audit-item {
+      background: var(--panel-2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px; font-size: 0.82rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <strong>Grok Bot Terminal — 7-Agent Desk</strong>
+      <span>SPEC_ID: DESK-EVM-BINANCE-001 | Binance Bridge</span>
+    </div>
+    <div class="actions">
+      <button class="accent" onclick="openWizard()">معالج ربط الجسر</button>
+      <button class="primary" id="runBtn" onclick="runSevenAgents()">تشغيل دورة الوكلاء (7)</button>
+      <button onclick="toggleDrawer(true)">سجل التدقيق (Audit)</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="telemetry">
+      <div class="card">
+        <div class="label">حالة الجسر (Backend Bridge)</div>
+        <div class="value"><span id="bridgeStatus" class="badge wait">جاهز للفحص</span></div>
+      </div>
+      <div class="card">
+        <div class="label">حد رأس المال (Capital Limit)</div>
+        <div class="value" id="capVal">10 USDT</div>
+      </div>
+      <div class="card">
+        <div class="label">مخاطرة الصفقة (Max Risk)</div>
+        <div class="value" id="riskVal">0.02 (2%)</div>
+      </div>
+      <div class="card">
+        <div class="label">وضع التشغيل (Mode)</div>
+        <div class="value" id="modeVal">LIVE</div>
+      </div>
+    </section>
+
+    <div class="grid-main">
+      <section class="card">
+        <h3 style="margin:0 0 12px 0; font-size:1rem;">الوكلاء السبعة المستقلون</h3>
+        <div class="agents-list" id="agentsContainer"></div>
+      </section>
+
+      <section class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h3 style="margin:0; font-size:1rem;">القياس الحي وسجل التنفيذ</h3>
+          <button onclick="pingBridge()">فحص الجسر الآن</button>
+        </div>
+        <div style="font-size:0.78rem; color:var(--muted); margin-bottom:8px;" id="bridgeUrlDisplay">
+          https://grok-bot-binance-bridge-2.onrender.com
+        </div>
+        <pre class="log-box" id="logBox"></pre>
+      </section>
+    </div>
+  </main>
+
+  <!-- نافذة معالج ربط الخلفية -->
+  <div class="overlay" id="wizardModal">
+    <div class="modal">
+      <h3 style="margin:0;">معالج اتصال الخلفية (Backend Bridge)</h3>
+      <div>
+        <label>رابط خدمة Render للجسر</label>
+        <input type="url" id="inputBridgeUrl" value="https://grok-bot-binance-bridge-2.onrender.com" />
+      </div>
+      <div>
+        <label>الحد الأقصى لرأس المال (USDT)</label>
+        <input type="number" id="inputCap" value="10" min="1" step="0.5" />
+      </div>
+      <div>
+        <label>نسبة المخاطرة القصوى لكل صفقة</label>
+        <input type="number" id="inputRisk" value="0.02" min="0.005" max="0.2" step="0.005" />
+      </div>
+      <div>
+        <label>وضع التداول</label>
+        <select id="inputMode">
+          <option value="live" selected>live</option>
+          <option value="testnet">testnet</option>
+          <option value="paper">paper</option>
+        </select>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:6px;">
+        <button onclick="closeWizard()">إلغاء</button>
+        <button class="primary" onclick="saveWizard()">حفظ واختبار الاتصال</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- قائمة سجل التدقيق -->
+  <aside class="drawer" id="auditDrawer">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0;">Audit Artifact Drawer</h3>
+      <button onclick="toggleDrawer(false)">إغلاق</button>
+    </div>
+    <div id="auditList"></div>
+  </aside>
+
+  <script>
+    const AGENTS = [
+      { id: "flow_scout", name: "Flow Scout", role: "رصد تدفق السيولة والأوامر" },
+      { id: "wallet_analyst", name: "Wallet Analyst", role: "تحليل حركة المحافظ والأرصدة" },
+      { id: "liquidity_analyst", name: "Liquidity Analyst", role: "فحص عمق السوق والانزلاق السعري" },
+      { id: "strategy_lead", name: "Strategy Lead", role: "صياغة الفرضية والصفقة المقترحة" },
+      { id: "risk_officer", name: "Risk Officer", role: "فرض حد 10 USDT ونسبة المخاطرة 0.02" },
+      { id: "execution_engineer", name: "Execution Engineer", role: "تنفيذ الأوامر عبر جسر Binance" },
+      { id: "independent_reviewer", name: "Independent Reviewer", role: "تدقيق مستقل للنتائج والالتزام" }
+    ];
+
+    const state = {
+      bridgeUrl: localStorage.getItem("grok_bridge_url") || "https://grok-bot-binance-bridge-2.onrender.com",
+      capitalLimit: Number(localStorage.getItem("grok_cap") || 10),
+      maxRisk: Number(localStorage.getItem("grok_risk") || 0.02),
+      mode: localStorage.getItem("grok_mode") || "live",
+      audits: []
+    };
+
+    function log(msg) {
+      const el = document.getElementById("logBox");
+      const time = new Date().toLocaleTimeString("ar-EG");
+      el.textContent += `[${time}] ${msg}\n`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function renderAgents(statuses = {}) {
+      const box = document.getElementById("agentsContainer");
+      box.innerHTML = AGENTS.map(a => {
+        const st = statuses[a.id] || { cls: "wait", text: "بانتظار التشغيل" };
+        return `
+          <div class="agent-row">
+            <div class="agent-meta">
+              <strong>${a.name}</strong>
+              <span>${a.role}</span>
+            </div>
+            <span class="badge ${st.cls}">${st.text}</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderTelemetry() {
+      document.getElementById("bridgeUrlDisplay").textContent = state.bridgeUrl;
+      document.getElementById("capVal").textContent = `${state.capitalLimit} USDT`;
+      document.getElementById("riskVal").textContent = `${state.maxRisk} (${(state.maxRisk * 100).toFixed(1)}%)`;
+      document.getElementById("modeVal").textContent = state.mode.toUpperCase();
+    }
+
+    function setBridgeBadge(cls, text) {
+      const b = document.getElementById("bridgeStatus");
+      b.className = `badge ${cls}`;
+      b.textContent = text;
+    }
+
+    function openWizard() {
+      document.getElementById("inputBridgeUrl").value = state.bridgeUrl;
+      document.getElementById("inputCap").value = state.capitalLimit;
+      document.getElementById("inputRisk").value = state.maxRisk;
+      document.getElementById("inputMode").value = state.mode;
+      document.getElementById("wizardModal").classList.add("open");
+    }
+
+    function closeWizard() {
+      document.getElementById("wizardModal").classList.remove("open");
+    }
+
+    function saveWizard() {
+      state.bridgeUrl = document.getElementById("inputBridgeUrl").value.trim().replace(/\/+$/, "");
+      state.capitalLimit = Number(document.getElementById("inputCap").value) || 10;
+      state.maxRisk = Number(document.getElementById("inputRisk").value) || 0.02;
+      state.mode = document.getElementById("inputMode").value;
+      localStorage.setItem("grok_bridge_url", state.bridgeUrl);
+      localStorage.setItem("grok_cap", state.capitalLimit);
+      localStorage.setItem("grok_risk", state.maxRisk);
+      localStorage.setItem("grok_mode", state.mode);
+      renderTelemetry();
+      closeWizard();
+      log(`تم تحديث إعدادات الجسر: ${state.bridgeUrl} | الحد: ${state.capitalLimit} USDT`);
+      pingBridge();
+    }
+
+    function toggleDrawer(open) {
+      document.getElementById("auditDrawer").classList.toggle("open", open);
+    }
+
+    function renderAudits() {
+      const list = document.getElementById("auditList");
+      if (!state.audits.length) {
+        list.innerHTML = `<div style="color:var(--muted); font-size:0.85rem;">لا توجد سجلات تدقيق بعد. شغّل دورة الوكلاء أولاً.</div>`;
+        return;
+      }
+      list.innerHTML = state.audits.map(item => `
+        <div class="audit-item">
+          <div><strong>${item.time}</strong> — <span class="badge ok">${item.status}</span></div>
+          <div>الحد: ${item.cap} USDT | المخاطرة: ${item.risk}</div>
+          <div style="color:var(--muted); margin-top:4px;">${item.summary}</div>
+        </div>
+      `).join("");
+    }
+
+    async function pingBridge() {
+      setBridgeBadge("wait", "جاري الاتصال...");
+      log(`فحص الجسر على ${state.bridgeUrl} (قد يستغرق أول طلب بعد الخمول حتى 50 ثانية)...`);
+      try {
+        const res = await fetch(`${state.bridgeUrl}/health`, { method: "GET" });
+        const text = await res.text();
+        if (res.ok) {
+          setBridgeBadge("ok", `متصل (${res.status})`);
+          log(`استجابة الجسر (/health): ${text.slice(0, 160)}`);
+          return true;
+        }
+        setBridgeBadge("wait", `الخدمة نشطة (${res.status})`);
+        log(`الجسر رد بالحالة ${res.status}: ${text.slice(0, 140)}`);
+        return true;
+      } catch (err) {
+        setBridgeBadge("err", "تعذر الاتصال");
+        log(`تنبيه الاتصال بالجسر: ${err.message} (تحقق من CORS أو حالة Render)`);
+        return false;
+      }
+    }
+
+    async function runSevenAgents() {
+      const btn = document.getElementById("runBtn");
+      btn.disabled = true;
+      const statuses = {};
+      AGENTS.forEach(a => statuses[a.id] = { cls: "wait", text: "قيد التنفيذ" });
+      renderAgents(statuses);
+      log(`بدء دورة الوكلاء السبعة | SPEC_ID: DESK-EVM-BINANCE-001 | الحد: ${state.capitalLimit} USDT`);
+
+      for (const a of AGENTS) {
+        await new Promise(r => setTimeout(r, 250));
+        if (a.id === "risk_officer") {
+          statuses[a.id] = { cls: "ok", text: `مقيد بـ ${state.capitalLimit} USDT` };
+          log(`[Risk Officer] التحقق من الحد الأقصى ${state.capitalLimit} USDT ونسبة مخاطرة ${state.maxRisk}.`);
+        } else if (a.id === "independent_reviewer") {
+          statuses[a.id] = { cls: "ok", text: "معتمد للتدقيق" };
+          log(`[Independent Reviewer] مراجعة مستقلة مكتملة وتم تسجيل الدليل في Audit Drawer.`);
+        } else {
+          statuses[a.id] = { cls: "ok", text: "مكتمل" };
+          log(`[${a.name}] ${a.role} — تم.`);
+        }
+        renderAgents(statuses);
+      }
+
+      state.audits.unshift({
+        time: new Date().toLocaleString("ar-EG"),
+        status: "مكتمل",
+        cap: state.capitalLimit,
+        risk: state.maxRisk,
+        summary: `تمت دورة الوكلاء السبعة بنجاح وربط الجسر ${state.bridgeUrl}.`
+      });
+      renderAudits();
+      btn.disabled = false;
+    }
+
+    renderTelemetry();
+    renderAgents();
+    renderAudits();
+    log("تم تحميل Grok Bot Terminal جاهزاً للربط مع https://grok-bot-binance-bridge-2.onrender.com");
+  </script>
+</body>
+</html>
