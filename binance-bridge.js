@@ -7,21 +7,20 @@ const API_SECRET = (process.env.BINANCE_API_SECRET || "").trim();
 const USE_TESTNET = String(process.env.BINANCE_TESTNET || "false").toLowerCase() === "true";
 const BASE_URL = USE_TESTNET ? "https://testnet.binance.vision" : "https://api.binance.com";
 
-const CAP_LIMIT = Number(process.env.CAPITAL_LIMIT_USDT || 10);
-const MAX_RISK = Number(process.env.MAX_RISK_PER_TRADE || 0.02);
+const DEFAULT_RISK = Number(process.env.MAX_RISK_PER_TRADE || 0.02);
 
 let botState = {
   running: false,
   mode: process.env.TRADING_MODE || "live",
   symbol: "BTCUSDT",
-  capitalLimit: CAP_LIMIT,
-  maxRisk: MAX_RISK,
+  useRealBalanceOnly: true,
+  maxRisk: DEFAULT_RISK,
   usdtFree: null,
   usdtLocked: null,
   startedAt: null,
   lastCycleAt: null,
   tradesCount: 0,
-  lastAction: "بانتظار أمر البدء",
+  lastAction: "بانتظار أمر البدء (يعتمد على الرصيد الفعلي)",
   lastError: null,
   audits: []
 };
@@ -79,15 +78,15 @@ async function runAgentCycle() {
     // 2. Wallet Analyst: فحص رصيد USDT الفعلي في بايننس
     const { free: usdtFree } = await fetchUsdtBalance();
 
-    // 3. Risk Officer: فرض حد رأس المال 10 USDT ونسبة المخاطرة 0.02
-    const allowedCap = Math.min(usdtFree, botState.capitalLimit);
-    const orderNotional = Math.max(5.5, Math.min(allowedCap, botState.capitalLimit));
+    // 3. Risk Officer: الاعتماد على الرصيد الفعلي فقط دون سقف ثابت
+    const riskFraction = Math.max(0.001, Math.min(1, Number(botState.maxRisk) || DEFAULT_RISK));
+    const orderNotional = Number((usdtFree * riskFraction).toFixed(2));
 
     let decision = "HOLD — مراقبة السوق دون فتح صفقة";
-    let executionDetail = `السعر: ${price} | التغير 24س: ${changePct.toFixed(2)}% | الرصيد الفعلي: ${usdtFree.toFixed(2)} USDT`;
+    let executionDetail = `السعر: ${price} | التغير 24س: ${changePct.toFixed(2)}% | الرصيد الفعلي: ${usdtFree.toFixed(2)} USDT | قيمة الصفقة المحسوبة: ${orderNotional.toFixed(2)} USDT`;
 
-    // 4. Strategy Lead & Execution Engineer: شرط الدخول
-    if (allowedCap >= 5.5 && quoteVol > 10000000 && changePct > 0.35 && changePct < 6.0) {
+    // 4. Strategy Lead & Execution Engineer: شرط الدخول الفعلي
+    if (usdtFree >= 5.5 && orderNotional >= 5.5 && quoteVol > 10000000 && changePct > 0.35 && changePct < 6.0) {
       if (botState.mode === "live" || botState.mode === "testnet") {
         const order = await binanceSigned("POST", "/api/v3/order", {
           symbol,
@@ -96,11 +95,11 @@ async function runAgentCycle() {
           quoteOrderQty: orderNotional.toFixed(2)
         });
         botState.tradesCount += 1;
-        decision = `BUY EXECUTED (${orderNotional.toFixed(2)} USDT)`;
-        executionDetail = `OrderID: ${order.orderId} | الحالة: ${order.status}`;
+        decision = `BUY EXECUTED (${orderNotional.toFixed(2)} USDT من الرصيد الفعلي)`;
+        executionDetail = `OrderID: ${order.orderId} | الرصيد قبل الأمر: ${usdtFree.toFixed(2)} USDT`;
         await fetchUsdtBalance();
       } else {
-        decision = `PAPER BUY (${orderNotional.toFixed(2)} USDT)`;
+        decision = `PAPER BUY (${orderNotional.toFixed(2)} USDT من الرصيد الفعلي)`;
       }
     }
 
@@ -111,6 +110,7 @@ async function runAgentCycle() {
       symbol,
       price,
       usdtFree: Number(usdtFree.toFixed(2)),
+      orderNotional,
       decision,
       detail: executionDetail
     });
@@ -184,9 +184,9 @@ const server = http.createServer(async (req, res) => {
   if (url === "/api/trade/start" && req.method === "POST") {
     const body = await readBody(req);
     if (body.symbol) botState.symbol = String(body.symbol).toUpperCase().trim();
-    if (body.capitalLimit) botState.capitalLimit = Math.min(10, Number(body.capitalLimit) || 10);
-    if (body.maxRisk) botState.maxRisk = Number(body.maxRisk) || 0.02;
+    if (body.maxRisk) botState.maxRisk = Number(body.maxRisk) || DEFAULT_RISK;
     if (body.mode) botState.mode = String(body.mode);
+    botState.useRealBalanceOnly = true;
 
     botState.running = true;
     botState.startedAt = new Date().toISOString();
@@ -196,7 +196,7 @@ const server = http.createServer(async (req, res) => {
     await runAgentCycle();
     loopTimer = setInterval(runAgentCycle, 30000);
 
-    return sendJson(res, 200, { ok: true, message: "تم بدء التداول الآلي", state: botState });
+    return sendJson(res, 200, { ok: true, message: "تم بدء التداول الآلي بالرصيد الفعلي", state: botState });
   }
 
   if (url === "/api/trade/stop" && req.method === "POST") {
