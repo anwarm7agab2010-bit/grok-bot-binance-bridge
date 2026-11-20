@@ -1,12 +1,12 @@
 {
   "name": "grok-bot-binance-bridge",
   "version": "1.0.0",
-  "description": "Grok Bot Terminal Binance Bridge for SPEC_ID DESK-EVM-BINANCE-001",
+  "description": "Grok Bot Terminal 7-Agent Binance Bridge using real USDT balance only",
   "main": "binance-bridge.js",
   "scripts": {
     "start": "node binance-bridge.js"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }
