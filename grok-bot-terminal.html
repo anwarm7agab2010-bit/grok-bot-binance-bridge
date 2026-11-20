@@ -1,255 +1,3 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Grok Bot Terminal — 7-Agent Autonomous Trading Desk</title>
-  <style>
-    :root {
-      --bg: #0b0f17;
-      --panel: #121826;
-      --panel-2: #182032;
-      --border: #263147;
-      --text: #e6edf7;
-      --muted: #94a3b8;
-      --accent: #22c55e;
-      --warn: #f59e0b;
-      --danger: #ef4444;
-      --info: #38bdf8;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, "Segoe UI", Tahoma, Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-    }
-    header {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 18px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--border);
-    }
-    .brand strong { display: block; font-size: 1.05rem; }
-    .brand span { font-size: 0.8rem; color: var(--muted); }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-    button {
-      background: var(--panel-2);
-      color: var(--text);
-      border: 1px solid var(--border);
-      padding: 10px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.9rem;
-      font-weight: 700;
-    }
-    button.start-btn { background: #16a34a; border-color: #22c55e; color: #fff; }
-    button.stop-btn { background: #dc2626; border-color: #ef4444; color: #fff; }
-    button.accent { background: #0284c7; border-color: #38bdf8; color: #fff; }
-    button:disabled { opacity: 0.45; cursor: not-allowed; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
-    .trade-bar {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 10px;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px;
-      align-items: end;
-    }
-    .telemetry {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 12px;
-    }
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px;
-    }
-    .card .label { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
-    .card .value { font-size: 1.1rem; font-weight: 700; direction: ltr; text-align: right; }
-    .badge {
-      display: inline-block;
-      padding: 3px 9px;
-      border-radius: 999px;
-      font-size: 0.76rem;
-      font-weight: 700;
-    }
-    .ok { background: rgba(34,197,94,.16); color: #4ade80; }
-    .wait { background: rgba(245,158,11,.16); color: #fbbf24; }
-    .err { background: rgba(239,68,68,.16); color: #f87171; }
-    .grid-main { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; }
-    @media (max-width: 860px) { .grid-main { grid-template-columns: 1fr; } }
-    .agents-list { display: grid; gap: 10px; }
-    .agent-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-      background: var(--panel-2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 12px;
-    }
-    .agent-meta strong { display: block; font-size: 0.92rem; }
-    .agent-meta span { font-size: 0.78rem; color: var(--muted); }
-    pre.log-box {
-      background: #070a10;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px;
-      min-height: 220px;
-      max-height: 360px;
-      overflow: auto;
-      font-size: 0.8rem;
-      color: #cbd5e1;
-      white-space: pre-wrap;
-      margin: 0;
-    }
-    label { font-size: 0.82rem; color: var(--muted); display: block; margin-bottom: 4px; }
-    input, select {
-      width: 100%; padding: 9px 10px; border-radius: 8px;
-      border: 1px solid var(--border); background: var(--bg); color: var(--text);
-    }
-    .overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,.65);
-      display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px;
-    }
-    .overlay.open { display: flex; }
-    .modal {
-      width: 100%; max-width: 460px; background: var(--panel);
-      border: 1px solid var(--border); border-radius: 14px; padding: 18px;
-      display: grid; gap: 12px;
-    }
-    .drawer {
-      position: fixed; top: 0; left: 0; height: 100%; width: min(440px, 95vw);
-      background: var(--panel); border-right: 1px solid var(--border);
-      transform: translateX(-100%); transition: transform .2s ease;
-      z-index: 60; padding: 18px; overflow-y: auto; display: grid; gap: 12px; align-content: start;
-    }
-    .drawer.open { transform: translateX(0); }
-    .audit-item {
-      background: var(--panel-2); border: 1px solid var(--border);
-      border-radius: 10px; padding: 10px; font-size: 0.82rem;
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <div class="brand">
-      <strong>Grok Bot Terminal — 7-Agent Desk</strong>
-      <span>SPEC_ID: DESK-EVM-BINANCE-001 | تداول آلي مباشر</span>
-    </div>
-    <div class="actions">
-      <button class="start-btn" id="startTradeBtn" onclick="startTrading()">▶ بدء التداول الآلي</button>
-      <button class="stop-btn" id="stopTradeBtn" onclick="stopTrading()" disabled>■ إيقاف التداول</button>
-      <button class="accent" onclick="openWizard()">معالج الجسر</button>
-      <button onclick="toggleDrawer(true)">سجل التدقيق</button>
-    </div>
-  </header>
-
-  <main class="container">
-    <section class="trade-bar">
-      <div>
-        <label>زوج التداول (Symbol)</label>
-        <select id="symbolSelect">
-          <option value="BTCUSDT" selected>BTC/USDT</option>
-          <option value="ETHUSDT">ETH/USDT</option>
-          <option value="SOLUSDT">SOL/USDT</option>
-          <option value="BNBUSDT">BNB/USDT</option>
-          <option value="XRPUSDT">XRP/USDT</option>
-        </select>
-      </div>
-      <div>
-        <label>رأس المال الأقصى (USDT)</label>
-        <input type="number" id="quickCap" value="10" min="5.5" max="10" step="0.5" />
-      </div>
-      <div>
-        <label>وضع التنفيذ</label>
-        <select id="quickMode">
-          <option value="live" selected>تداول حقيقي (LIVE)</option>
-          <option value="paper">محاكاة (PAPER)</option>
-        </select>
-      </div>
-      <div style="display:grid; gap:6px;">
-        <button style="width:100%;" onclick="pingBridge()">فحص اتصال الجسر</button>
-        <button style="width:100%;" onclick="refreshBalance()">تحديث رصيد بايننس</button>
-      </div>
-    </section>
-
-    <section class="telemetry">
-      <div class="card">
-        <div class="label">الرصيد الفعلي (Binance USDT)</div>
-        <div class="value" id="balanceVal">-- USDT</div>
-      </div>
-      <div class="card">
-        <div class="label">حالة الجسر (Bridge)</div>
-        <div class="value" style="text-align:right;"><span id="bridgeStatus" class="badge wait">بانتظار الفحص</span></div>
-      </div>
-      <div class="card">
-        <div class="label">حالة البوت الآلي</div>
-        <div class="value" style="text-align:right;"><span id="botRunBadge" class="badge err">متوقف</span></div>
-      </div>
-      <div class="card">
-        <div class="label">حد رأس المال</div>
-        <div class="value" id="capVal">10 USDT</div>
-      </div>
-      <div class="card">
-        <div class="label">مخاطرة الصفقة</div>
-        <div class="value" id="riskVal">0.02 (2%)</div>
-      </div>
-    </section>
-
-    <div class="grid-main">
-      <section class="card">
-        <h3 style="margin:0 0 12px 0; font-size:1rem;">الوكلاء السبعة المستقلون</h3>
-        <div class="agents-list" id="agentsContainer"></div>
-      </section>
-
-      <section class="card">
-        <h3 style="margin:0 0 8px 0; font-size:1rem;">القياس الحي وسجل التداول</h3>
-        <div style="font-size:0.78rem; color:var(--muted); margin-bottom:8px; direction:ltr;" id="bridgeUrlDisplay">
-          https://grok-bot-binance-bridge-2.onrender.com
-        </div>
-        <pre class="log-box" id="logBox"></pre>
-      </section>
-    </div>
-  </main>
-
-  <div class="overlay" id="wizardModal">
-    <div class="modal">
-      <h3 style="margin:0;">إعدادات رابط الجسر (Render)</h3>
-      <div>
-        <label>رابط خدمة Render</label>
-        <input type="url" id="inputBridgeUrl" value="https://grok-bot-binance-bridge-2.onrender.com" />
-      </div>
-      <div>
-        <label>نسبة المخاطرة لكل صفقة</label>
-        <input type="number" id="inputRisk" value="0.02" step="0.005" />
-      </div>
-      <div style="display:flex; gap:8px; justify-content:flex-end;">
-        <button onclick="closeWizard()">إغلاق</button>
-        <button class="start-btn" onclick="saveWizard()">حفظ وفحص</button>
-      </div>
-    </div>
-  </div>
-
-  <aside class="drawer" id="auditDrawer">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h3 style="margin:0;">سجل صفقات وتدقيق الوكلاء</h3>
-      <button onclick="toggleDrawer(false)">إغلاق</button>
-    </div>
-    <div id="auditList"></div>
-  </aside>
-
   <script>
     const AGENTS = [
       { id: "flow_scout", name: "Flow Scout", role: "رصد تدفق السيولة والأوامر" },
@@ -261,8 +9,10 @@
       { id: "independent_reviewer", name: "Independent Reviewer", role: "مراجعة واعتماد سجل التدقيق" }
     ];
 
+    const DEFAULT_BRIDGE_URL = "https://grok-bot-binance-bridge-2.onrender.com";
+
     const state = {
-      bridgeUrl: localStorage.getItem("grok_bridge_url") || "https://grok-bot-binance-bridge-2.onrender.com",
+      bridgeUrl: (localStorage.getItem("grok_bridge_url") || DEFAULT_BRIDGE_URL).trim().replace(/\/+$/, ""),
       maxRisk: Number(localStorage.getItem("grok_risk") || 0.02)
     };
 
@@ -270,13 +20,38 @@
 
     function log(msg) {
       const el = document.getElementById("logBox");
+      if (!el) return;
       const time = new Date().toLocaleTimeString("ar-EG");
       el.textContent += `[${time}] ${msg}\n`;
       el.scrollTop = el.scrollHeight;
     }
 
+    async function fetchWithRetry(url, options = {}, retries = 2, timeoutMs = 65000) {
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, {
+            ...options,
+            cache: "no-store",
+            signal: controller.signal
+          });
+          clearTimeout(timer);
+          return res;
+        } catch (err) {
+          clearTimeout(timer);
+          const isLast = attempt === retries;
+          const reason = err.name === "AbortError" ? "انتهت مهلة الاستيقاظ (65s)" : err.message;
+          log(`محاولة ${attempt + 1}/${retries + 1} فشلت (${url}): ${reason}`);
+          if (isLast) throw new Error(reason);
+          await new Promise(r => setTimeout(r, 2500));
+        }
+      }
+    }
+
     function renderAgents(active) {
       const box = document.getElementById("agentsContainer");
+      if (!box) return;
       box.innerHTML = AGENTS.map(a => `
         <div class="agent-row">
           <div class="agent-meta">
@@ -325,35 +100,38 @@
     async function pingBridge() {
       const badge = document.getElementById("bridgeStatus");
       badge.className = "badge wait";
-      badge.textContent = "جاري الاتصال...";
-      log(`الاتصال بالجسر: ${state.bridgeUrl}/health ...`);
+      badge.textContent = "جاري الإيقاظ والاتصال...";
+      log(`الاتصال بالجسر: ${state.bridgeUrl}/health (مهلة حتى 65 ثانية)...`);
       try {
-        const res = await fetch(`${state.bridgeUrl}/health`);
+        const res = await fetchWithRetry(`${state.bridgeUrl}/health`);
         const data = await res.json();
         if (res.ok && data.ok) {
           badge.className = "badge ok";
           badge.textContent = data.keysConfigured ? "متصل + مفاتيح جاهزة" : "متصل (بدون مفاتيح)";
           log(`الجسر متصل بنجاح | المفاتيح: ${data.keysConfigured ? "مفعلة" : "غير مضبوطة"}`);
           if (data.state && data.state.lastError) {
-            log(`⚠️ رسالة من بايننس: ${data.state.lastError}`);
+            log(`⚠️ تنبيه من بايننس: ${data.state.lastError}`);
           }
           updateUIState(data.state);
+          if (data.keysConfigured && (!data.state || typeof data.state.usdtFree !== "number")) {
+            await refreshBalance();
+          }
         } else {
           badge.className = "badge err";
           badge.textContent = `خطأ (${res.status})`;
-          log(`استجابة غير متوقعة من الجسر: ${JSON.stringify(data)}`);
+          log(`استجابة غير متوقعة: ${JSON.stringify(data)}`);
         }
       } catch (err) {
         badge.className = "badge err";
         badge.textContent = "تعذر الاتصال";
-        log(`تعذر الوصول للجسر: ${err.message}`);
+        log(`❌ تعذر الوصول للجسر: ${err.message} | تأكد من فتح الصفحة عبر https:// ومن وصول الشبكة لـ onrender.com`);
       }
     }
 
     async function refreshBalance() {
       log("جاري جلب الرصيد الفعلي من Binance...");
       try {
-        const res = await fetch(`${state.bridgeUrl}/api/balance`);
+        const res = await fetchWithRetry(`${state.bridgeUrl}/api/balance`);
         const data = await res.json();
         if (res.ok && data.ok) {
           document.getElementById("balanceVal").textContent = `${Number(data.usdtFree).toFixed(2)} USDT`;
@@ -373,7 +151,7 @@
 
       log(`إرسال أمر بدء التداول الآلي على ${symbol} بحد ${capitalLimit} USDT (${mode.toUpperCase()})...`);
       try {
-        const res = await fetch(`${state.bridgeUrl}/api/trade/start`, {
+        const res = await fetchWithRetry(`${state.bridgeUrl}/api/trade/start`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ symbol, capitalLimit, maxRisk: state.maxRisk, mode })
@@ -396,7 +174,7 @@
     async function stopTrading() {
       log("إرسال أمر إيقاف التداول الآلي...");
       try {
-        const res = await fetch(`${state.bridgeUrl}/api/trade/stop`, { method: "POST" });
+        const res = await fetchWithRetry(`${state.bridgeUrl}/api/trade/stop`, { method: "POST" });
         const data = await res.json();
         if (data.ok) {
           log(`🛑 ${data.message}`);
@@ -410,7 +188,7 @@
 
     async function syncStatus() {
       try {
-        const res = await fetch(`${state.bridgeUrl}/api/status`);
+        const res = await fetchWithRetry(`${state.bridgeUrl}/api/status`, {}, 1, 30000);
         const data = await res.json();
         if (data.ok && data.state) {
           updateUIState(data.state);
@@ -426,7 +204,7 @@
     }
     function closeWizard() { document.getElementById("wizardModal").classList.remove("open"); }
     function saveWizard() {
-      state.bridgeUrl = document.getElementById("inputBridgeUrl").value.trim().replace(/\/+$/, "");
+      state.bridgeUrl = (document.getElementById("inputBridgeUrl").value || DEFAULT_BRIDGE_URL).trim().replace(/\/+$/, "");
       state.maxRisk = Number(document.getElementById("inputRisk").value) || 0.02;
       localStorage.setItem("grok_bridge_url", state.bridgeUrl);
       localStorage.setItem("grok_risk", state.maxRisk);
@@ -436,9 +214,10 @@
     }
     function toggleDrawer(open) { document.getElementById("auditDrawer").classList.toggle("open", open); }
 
+    if (window.location.protocol === "content:" || window.location.protocol === "file:") {
+      log("⚠️ تنبيه: الصفحة مفتوحة من ملف محلي (" + window.location.protocol + "). يُفضل فتح رابط GitHub Pages المباشر.");
+    }
     document.getElementById("bridgeUrlDisplay").textContent = state.bridgeUrl;
     renderAgents(false);
     pingBridge();
   </script>
-</body>
-</html>
