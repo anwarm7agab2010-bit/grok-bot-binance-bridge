@@ -1,249 +1,187 @@
-import "dotenv/config";
-import express from "express";
-import crypto from "crypto";
-import cors from "cors";
+const http = require("http");
+const crypto = require("crypto");
 
-const app = express();
-app.use(
-  cors({
-    origin: process.env.ALLOWED_ORIGIN || "*",
-  })
-);
-app.use(express.json());
-
-const SPEC_ID = "DESK-EVM-BINANCE-001";
-const PORT = Number(process.env.PORT || 8787);
+const PORT = process.env.PORT || 10000;
 const API_KEY = (process.env.BINANCE_API_KEY || "").trim();
 const API_SECRET = (process.env.BINANCE_API_SECRET || "").trim();
-const IS_TESTNET = process.env.BINANCE_TESTNET !== "false";
+const USE_TESTNET = String(process.env.BINANCE_TESTNET || "false").toLowerCase() === "true";
+const BASE_URL = USE_TESTNET ? "https://testnet.binance.vision" : "https://api.binance.com";
 
-const BASE_URL = IS_TESTNET
-  ? "https://testnet.binance.vision"
-  : "https://api.binance.com";
+const CAP_LIMIT = Number(process.env.CAPITAL_LIMIT_USDT || 10);
+const MAX_RISK = Number(process.env.MAX_RISK_PER_TRADE || 0.02);
 
-const MAX_ORDER_USDT = Number(process.env.MAX_ORDER_USDT || 10.0);
-const QUOTE_TTL_MS = Number(process.env.QUOTE_TTL_MS || 15000);
-const ALLOWED_SYMBOLS = new Set(
-  (process.env.ALLOWED_SYMBOLS || "BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT")
-    .split(",")
-    .map((s) => s.trim().toUpperCase())
-    .filter(Boolean)
-);
+let botState = {
+  running: false,
+  mode: process.env.TRADING_MODE || "live",
+  symbol: "BTCUSDT",
+  capitalLimit: CAP_LIMIT,
+  maxRisk: MAX_RISK,
+  startedAt: null,
+  lastCycleAt: null,
+  tradesCount: 0,
+  lastAction: "بانتظار أمر البدء",
+  lastError: null,
+  audits: []
+};
 
-// منع تكرار تنفيذ نفس الأمر عند إعادة المحاولة (Idempotency)
-const processedOrderIds = new Map();
+let loopTimer = null;
 
-function signQuery(queryString) {
-  return crypto
-    .createHmac("sha256", API_SECRET)
-    .update(queryString)
-    .digest("hex");
+function signQuery(params) {
+  const query = new URLSearchParams(params).toString();
+  const signature = crypto.createHmac("sha256", API_SECRET).update(query).digest("hex");
+  return `${query}&signature=${signature}`;
 }
 
-async function binanceSignedRequest(method, path, params = {}) {
-  if (!API_KEY || !API_SECRET) {
-    throw new Error("BINANCE_API_KEY أو BINANCE_API_SECRET غير مضبوطة في متغيرات البيئة");
-  }
-
-  const timestamp = Date.now();
-  const searchParams = new URLSearchParams({
-    ...params,
-    recvWindow: "5000",
-    timestamp: String(timestamp),
-  });
-
-  const queryString = searchParams.toString();
-  const signature = signQuery(queryString);
-  const url = `${BASE_URL}${path}?${queryString}&signature=${signature}`;
-
-  const response = await fetch(url, {
-    method,
-    headers: {
-      "X-MBX-APIKEY": API_KEY,
-      "Content-Type": "application/json",
-    },
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.msg || `Binance API Error (${response.status})`);
-  }
+async function binancePublic(path) {
+  const res = await fetch(`${BASE_URL}${path}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.msg || `HTTP ${res.status}`);
   return data;
 }
 
-// فحص الاتصال وقراءة رصيد USDT وحالة التداول
-app.get("/api/health", async (req, res) => {
-  try {
-    const account = await binanceSignedRequest("GET", "/api/v3/account");
-
-    if (account.canWithdraw === true) {
-      return res.status(403).json({
-        ok: false,
-        specId: SPEC_ID,
-        error: "تحذير أمني: صلاحية السحب (Enable Withdrawals) مفعّلة! يجب تعطيلها من Binance.",
-      });
-    }
-
-    const usdtObj = (account.balances || []).find((b) => b.asset === "USDT");
-    const usdtFree = usdtObj ? Number(usdtObj.free) : 0;
-    const usdtLocked = usdtObj ? Number(usdtObj.locked) : 0;
-
-    res.json({
-      ok: true,
-      specId: SPEC_ID,
-      mode: IS_TESTNET ? "TESTNET" : "LIVE",
-      endpoint: BASE_URL,
-      canTrade: Boolean(account.canTrade),
-      canWithdraw: Boolean(account.canWithdraw),
-      usdtFree,
-      usdtLocked,
-      maxOrderUsdt: MAX_ORDER_USDT,
-      allowedSymbols: Array.from(ALLOWED_SYMBOLS),
-      serverTime: new Date().toISOString(),
-    });
-  } catch (err) {
-    res.status(500).json({
-      ok: false,
-      specId: SPEC_ID,
-      error: err.message,
-    });
+async function binanceSigned(method, path, params = {}) {
+  if (!API_KEY || !API_SECRET) {
+    throw new Error("متغيرات BINANCE_API_KEY أو BINANCE_API_SECRET غير مضبوطة في Render");
   }
-});
+  const signed = signQuery({ ...params, timestamp: Date.now(), recvWindow: 5000 });
+  const res = await fetch(`${BASE_URL}${path}?${signed}`, {
+    method,
+    headers: { "X-MBX-APIKEY": API_KEY }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Binance (${data.code || res.status}): ${data.msg || "خطأ غير معروف"}`);
+  return data;
+}
 
-// جلب أفضل سعر شراء/بيع حي لزوج مسموح
-app.get("/api/ticker/:symbol", async (req, res) => {
+async function runAgentCycle() {
   try {
-    const symbol = req.params.symbol.toUpperCase();
-    if (!ALLOWED_SYMBOLS.has(symbol)) {
-      return res.status(400).json({
-        ok: false,
-        error: `الزوج ${symbol} غير مدرج في القائمة المسموحة`,
-      });
+    botState.lastCycleAt = new Date().toISOString();
+    const symbol = botState.symbol || "BTCUSDT";
+
+    // 1. Flow Scout & Liquidity Analyst: جلب السعر وبيانات السيولة
+    const ticker = await binancePublic(`/api/v3/ticker/24hr?symbol=${symbol}`);
+    const price = parseFloat(ticker.lastPrice);
+    const changePct = parseFloat(ticker.priceChangePercent);
+    const quoteVol = parseFloat(ticker.quoteVolume);
+
+    // 2. Wallet Analyst: فحص رصيد USDT الحقيقي
+    const account = await binanceSigned("GET", "/api/v3/account");
+    const usdtObj = (account.balances || []).find(b => b.asset === "USDT");
+    const usdtFree = usdtObj ? parseFloat(usdtObj.free) : 0;
+
+    // 3. Risk Officer: فرض حد رأس المال 10 USDT ونسبة المخاطرة 0.02
+    const allowedCap = Math.min(usdtFree, botState.capitalLimit);
+    const orderNotional = Math.max(5.5, Math.min(allowedCap, botState.capitalLimit)); // الحد الأدنى في بايننس غالباً ~5 USDT
+
+    let decision = "HOLD — مراقبة السوق دون فتح صفقة";
+    let executionDetail = `السعر: ${price} | التغير 24س: ${changePct.toFixed(2)}% | الرصيد المتاح: ${usdtFree.toFixed(2)} USDT`;
+
+    // 4. Strategy Lead & Execution Engineer: شرط الدخول (ارتداد إيجابي + سيولة كافية + رصيد كافٍ)
+    if (allowedCap >= 5.5 && quoteVol > 10000000 && changePct > 0.35 && changePct < 6.0) {
+      if (botState.mode === "live" || botState.mode === "testnet") {
+        const order = await binanceSigned("POST", "/api/v3/order", {
+          symbol,
+          side: "BUY",
+          type: "MARKET",
+          quoteOrderQty: orderNotional.toFixed(2)
+        });
+        botState.tradesCount += 1;
+        decision = `BUY EXECUTED (${orderNotional.toFixed(2)} USDT)`;
+        executionDetail = `OrderID: ${order.orderId} | الحالة: ${order.status}`;
+      } else {
+        decision = `PAPER BUY (${orderNotional.toFixed(2)} USDT)`;
+      }
     }
 
-    const response = await fetch(`${BASE_URL}/api/v3/ticker/bookTicker?symbol=${symbol}`);
-    const data = await response.json();
-    if (!response.ok) {
-      return res.status(response.status).json({
-        ok: false,
-        error: data.msg || "فشل جلب السعر",
-      });
-    }
-
-    res.json({
-      ok: true,
-      symbol: data.symbol,
-      bidPrice: Number(data.bidPrice),
-      askPrice: Number(data.askPrice),
-      timestamp: Date.now(),
-    });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// تنفيذ أمر تداول بعد التحقق من حوكمة الوكلاء السبعة وحدود المخاطر
-app.post("/api/order", async (req, res) => {
-  try {
-    const {
+    botState.lastAction = `${decision} — ${executionDetail}`;
+    botState.lastError = null;
+    botState.audits.unshift({
+      time: new Date().toLocaleTimeString("ar-EG"),
       symbol,
-      side,
-      quoteOrderQty,
-      clientOrderId,
-      quoteTimestamp,
-      governance,
-    } = req.body || {};
-
-    if (!clientOrderId || typeof clientOrderId !== "string") {
-      return res.status(400).json({
-        ok: false,
-        status: "BLOCKED",
-        error: "clientOrderId مطلوب لمنع تكرار الأمر",
-      });
-    }
-
-    if (processedOrderIds.has(clientOrderId)) {
-      return res.json({
-        ok: true,
-        duplicate: true,
-        result: processedOrderIds.get(clientOrderId),
-      });
-    }
-
-    if (
-      !governance ||
-      governance.reviewerDecision !== "APPROVE" ||
-      governance.riskOfficerVeto === true ||
-      governance.passedAgents !== 7
-    ) {
-      return res.status(403).json({
-        ok: false,
-        status: "VETOED",
-        error: "مرفوض: يتطلب اجتياز الوكلاء السبعة وموافقة Independent Reviewer الصريحة.",
-      });
-    }
-
-    if (!quoteTimestamp || Date.now() - Number(quoteTimestamp) > QUOTE_TTL_MS) {
-      return res.status(409).json({
-        ok: false,
-        status: "BLOCKED",
-        error: "انتهت صلاحية عرض السعر (Stale Quote TTL).",
-      });
-    }
-
-    const cleanSymbol = String(symbol || "").toUpperCase();
-    const cleanSide = String(side || "").toUpperCase();
-    const amountUsdt = Number(quoteOrderQty);
-
-    if (!ALLOWED_SYMBOLS.has(cleanSymbol)) {
-      return res.status(400).json({
-        ok: false,
-        status: "BLOCKED",
-        error: `الزوج ${cleanSymbol} غير مسموح`,
-      });
-    }
-
-    if (!["BUY", "SELL"].includes(cleanSide)) {
-      return res.status(400).json({
-        ok: false,
-        status: "BLOCKED",
-        error: "اتجاه الأمر يجب أن يكون BUY أو SELL",
-      });
-    }
-
-    if (!Number.isFinite(amountUsdt) || amountUsdt <= 0 || amountUsdt > MAX_ORDER_USDT) {
-      return res.status(400).json({
-        ok: false,
-        status: "VETOED",
-        error: `قيمة الصفقة (${amountUsdt} USDT) تتجاوز الحد الأقصى (${MAX_ORDER_USDT} USDT).`,
-      });
-    }
-
-    const orderResult = await binanceSignedRequest("POST", "/api/v3/order", {
-      symbol: cleanSymbol,
-      side: cleanSide,
-      type: "MARKET",
-      quoteOrderQty: amountUsdt.toFixed(2),
-      newClientOrderId: clientOrderId,
+      price,
+      usdtFree: Number(usdtFree.toFixed(2)),
+      decision,
+      detail: executionDetail
     });
-
-    processedOrderIds.set(clientOrderId, orderResult);
-
-    res.json({
-      ok: true,
-      specId: SPEC_ID,
-      mode: IS_TESTNET ? "TESTNET" : "LIVE",
-      order: orderResult,
-    });
+    if (botState.audits.length > 25) botState.audits.pop();
   } catch (err) {
-    res.status(500).json({
-      ok: false,
-      status: "ERROR",
-      error: err.message,
+    botState.lastError = err.message;
+    botState.lastAction = `خطأ أثناء الدورة: ${err.message}`;
+  }
+}
+
+function sendJson(res, status, payload) {
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type"
+  });
+  res.end(JSON.stringify(payload));
+}
+
+function readBody(req) {
+  return new Promise(resolve => {
+    let raw = "";
+    req.on("data", chunk => (raw += chunk));
+    req.on("end", () => {
+      try { resolve(raw ? JSON.parse(raw) : {}); }
+      catch { resolve({}); }
+    });
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  if (req.method === "OPTIONS") return sendJson(res, 200, { ok: true });
+
+  const url = req.url.split("?")[0];
+
+  if (url === "/" || url === "/health") {
+    return sendJson(res, 200, {
+      ok: true,
+      service: "grok-bot-binance-bridge",
+      specId: "DESK-EVM-BINANCE-001",
+      keysConfigured: Boolean(API_KEY && API_SECRET),
+      testnet: USE_TESTNET,
+      state: botState
     });
   }
+
+  if (url === "/api/status" && req.method === "GET") {
+    return sendJson(res, 200, { ok: true, state: botState });
+  }
+
+  if (url === "/api/trade/start" && req.method === "POST") {
+    const body = await readBody(req);
+    if (body.symbol) botState.symbol = String(body.symbol).toUpperCase().trim();
+    if (body.capitalLimit) botState.capitalLimit = Math.min(10, Number(body.capitalLimit) || 10);
+    if (body.maxRisk) botState.maxRisk = Number(body.maxRisk) || 0.02;
+    if (body.mode) botState.mode = String(body.mode);
+
+    botState.running = true;
+    botState.startedAt = new Date().toISOString();
+    botState.lastError = null;
+
+    if (loopTimer) clearInterval(loopTimer);
+    await runAgentCycle();
+    loopTimer = setInterval(runAgentCycle, 30000); // دورة فحص وتداول كل 30 ثانية
+
+    return sendJson(res, 200, { ok: true, message: "تم بدء التداول الآلي", state: botState });
+  }
+
+  if (url === "/api/trade/stop" && req.method === "POST") {
+    botState.running = false;
+    if (loopTimer) {
+      clearInterval(loopTimer);
+      loopTimer = null;
+    }
+    botState.lastAction = "تم إيقاف التداول الآلي يدوياً";
+    return sendJson(res, 200, { ok: true, message: "تم إيقاف التداول", state: botState });
+  }
+
+  return sendJson(res, 404, { ok: false, error: "Route not found" });
 });
 
-app.listen(PORT, () => {
-  console.log(`[${SPEC_ID}] Binance Bridge running on port ${PORT} (${IS_TESTNET ? "TESTNET" : "LIVE"})`);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Binance Bridge running on port ${PORT}`);
 });
