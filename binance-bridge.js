@@ -2,14 +2,17 @@ const http = require("http");
 const crypto = require("crypto");
 
 const PORT = process.env.PORT || 10000;
-const API_KEY = (process.env.BINANCE_API_KEY || "").trim();
-const API_SECRET = (process.env.BINANCE_API_SECRET || "").trim();
+const API_KEY = (process.env.BINANCE_API_KEY || "").replace(/[^A-Za-z0-9]/g, "");
+const API_SECRET = (process.env.BINANCE_API_SECRET || "").replace(/[^A-Za-z0-9]/g, "");
 const USE_TESTNET = String(process.env.BINANCE_TESTNET || "false").toLowerCase() === "true";
 const BASE_URL = USE_TESTNET ? "https://testnet.binance.vision" : "https://api.binance.com";
 
 const DEFAULT_RISK = Number(process.env.MAX_RISK_PER_TRADE || 0.02);
-const TELEGRAM_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+const TELEGRAM_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || "").replace(/[\r\n]+/g, "").trim();
 const ALLOWED_CHAT_ID = String(process.env.TELEGRAM_CHAT_ID || "6406388705").trim();
+
+let timeOffset = 0;
+let lastTimeSyncAt = 0;
 
 let botState = {
   running: false,
@@ -19,6 +22,7 @@ let botState = {
   maxRisk: DEFAULT_RISK,
   usdtFree: null,
   usdtLocked: null,
+  timeOffsetMs: 0,
   startedAt: null,
   lastCycleAt: null,
   tradesCount: 0,
@@ -45,7 +49,23 @@ async function sendTelegramMessage(text, chatId = ALLOWED_CHAT_ID) {
   } catch (_) {}
 }
 
-function signQuery(params) {
+async function syncBinanceTime(force = false) {
+  const now = Date.now();
+  if (!force && lastTimeSyncAt && now - lastTimeSyncAt < 60000) {
+    return timeOffset;
+  }
+  const res = await fetch(`${BASE_URL}/api/v3/time`);
+  const data = await res.json();
+  if (!res.ok || typeof data.serverTime !== "number") {
+    throw new Error(data.msg || "تعذر مزامنة وقت Binance");
+  }
+  timeOffset = data.serverTime - Date.now();
+  lastTimeSyncAt = Date.now();
+  botState.timeOffsetMs = timeOffset;
+  return timeOffset;
+}
+
+function signQuery(params, syncedTimestamp) {
   const query = new URLSearchParams(params).toString();
   const signature = crypto.createHmac("sha256", API_SECRET).update(query).digest("hex");
   return `${query}&signature=${signature}`;
@@ -58,17 +78,26 @@ async function binancePublic(path) {
   return data;
 }
 
-async function binanceSigned(method, path, params = {}) {
+async function binanceSigned(method, path, params = {}, retried = false) {
   if (!API_KEY || !API_SECRET) {
     throw new Error("متغيرات BINANCE_API_KEY أو BINANCE_API_SECRET غير مضبوطة");
   }
-  const signed = signQuery({ ...params, timestamp: Date.now(), recvWindow: 5000 });
+  await syncBinanceTime(retried);
+  const timestamp = Date.now() + timeOffset;
+  const signed = signQuery({ ...params, timestamp, recvWindow: 10000 }, timestamp);
+
   const res = await fetch(`${BASE_URL}${path}?${signed}`, {
     method,
     headers: { "X-MBX-APIKEY": API_KEY }
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(`Binance (${data.code || res.status}): ${data.msg || "خطأ غير معروف"}`);
+
+  if (!res.ok) {
+    if (!retried && (data.code === -1021 || data.code === -1022)) {
+      return binanceSigned(method, path, params, true);
+    }
+    throw new Error(`Binance (${data.code || res.status}): ${data.msg || "خطأ غير معروف"}`);
+  }
   return data;
 }
 
@@ -87,16 +116,13 @@ async function runAgentCycle() {
     botState.lastCycleAt = new Date().toISOString();
     const symbol = botState.symbol || "BTCUSDT";
 
-    // 1. Flow Scout & Liquidity Analyst: جلب السعر وبيانات السيولة
     const ticker = await binancePublic(`/api/v3/ticker/24hr?symbol=${symbol}`);
     const price = parseFloat(ticker.lastPrice);
     const changePct = parseFloat(ticker.priceChangePercent);
     const quoteVol = parseFloat(ticker.quoteVolume);
 
-    // 2. Wallet Analyst: فحص رصيد USDT الفعلي في بايننس
     const { free: usdtFree } = await fetchUsdtBalance();
 
-    // 3. Risk Officer: الاعتماد على الرصيد الفعلي فقط دون سقف ثابت
     const riskFraction = Math.max(0.001, Math.min(1, Number(botState.maxRisk) || DEFAULT_RISK));
     const orderNotional = Number((usdtFree * riskFraction).toFixed(2));
 
@@ -104,7 +130,6 @@ async function runAgentCycle() {
     let executionDetail = `السعر: ${price} | التغير 24س: ${changePct.toFixed(2)}% | الرصيد الفعلي: ${usdtFree.toFixed(2)} USDT | قيمة الصفقة المحسوبة: ${orderNotional.toFixed(2)} USDT`;
     let orderExecuted = false;
 
-    // 4. Strategy Lead & Execution Engineer: شرط الدخول الفعلي
     if (usdtFree >= 5.5 && orderNotional >= 5.5 && quoteVol > 10000000 && changePct > 0.35 && changePct < 6.0) {
       if (botState.mode === "live" || botState.mode === "testnet") {
         const order = await binanceSigned("POST", "/api/v3/order", {
@@ -334,6 +359,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Binance Bridge running on port ${PORT}`);
+  syncBinanceTime(true).catch(() => {});
   if (TELEGRAM_BOT_TOKEN) {
     setInterval(pollTelegramUpdates, 4000);
   }
