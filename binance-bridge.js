@@ -330,3 +330,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   return sendJson(res, 404, { ok: false, error: "Route not found" });
+});
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Binance Bridge running on port ${PORT}`);
+  if (TELEGRAM_BOT_TOKEN) {
+    setInterval(pollTelegramUpdates, 4000);
+  }
+});
