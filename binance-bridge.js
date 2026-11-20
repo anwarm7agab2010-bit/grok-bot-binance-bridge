@@ -16,6 +16,8 @@ let botState = {
   symbol: "BTCUSDT",
   capitalLimit: CAP_LIMIT,
   maxRisk: MAX_RISK,
+  usdtFree: null,
+  usdtLocked: null,
   startedAt: null,
   lastCycleAt: null,
   tradesCount: 0,
@@ -53,6 +55,16 @@ async function binanceSigned(method, path, params = {}) {
   return data;
 }
 
+async function fetchUsdtBalance() {
+  const account = await binanceSigned("GET", "/api/v3/account");
+  const usdtObj = (account.balances || []).find(b => b.asset === "USDT");
+  const free = usdtObj ? parseFloat(usdtObj.free) : 0;
+  const locked = usdtObj ? parseFloat(usdtObj.locked) : 0;
+  botState.usdtFree = Number(free.toFixed(4));
+  botState.usdtLocked = Number(locked.toFixed(4));
+  return { free, locked };
+}
+
 async function runAgentCycle() {
   try {
     botState.lastCycleAt = new Date().toISOString();
@@ -64,19 +76,17 @@ async function runAgentCycle() {
     const changePct = parseFloat(ticker.priceChangePercent);
     const quoteVol = parseFloat(ticker.quoteVolume);
 
-    // 2. Wallet Analyst: فحص رصيد USDT الحقيقي
-    const account = await binanceSigned("GET", "/api/v3/account");
-    const usdtObj = (account.balances || []).find(b => b.asset === "USDT");
-    const usdtFree = usdtObj ? parseFloat(usdtObj.free) : 0;
+    // 2. Wallet Analyst: فحص رصيد USDT الفعلي في بايننس
+    const { free: usdtFree } = await fetchUsdtBalance();
 
     // 3. Risk Officer: فرض حد رأس المال 10 USDT ونسبة المخاطرة 0.02
     const allowedCap = Math.min(usdtFree, botState.capitalLimit);
-    const orderNotional = Math.max(5.5, Math.min(allowedCap, botState.capitalLimit)); // الحد الأدنى في بايننس غالباً ~5 USDT
+    const orderNotional = Math.max(5.5, Math.min(allowedCap, botState.capitalLimit));
 
     let decision = "HOLD — مراقبة السوق دون فتح صفقة";
-    let executionDetail = `السعر: ${price} | التغير 24س: ${changePct.toFixed(2)}% | الرصيد المتاح: ${usdtFree.toFixed(2)} USDT`;
+    let executionDetail = `السعر: ${price} | التغير 24س: ${changePct.toFixed(2)}% | الرصيد الفعلي: ${usdtFree.toFixed(2)} USDT`;
 
-    // 4. Strategy Lead & Execution Engineer: شرط الدخول (ارتداد إيجابي + سيولة كافية + رصيد كافٍ)
+    // 4. Strategy Lead & Execution Engineer: شرط الدخول
     if (allowedCap >= 5.5 && quoteVol > 10000000 && changePct > 0.35 && changePct < 6.0) {
       if (botState.mode === "live" || botState.mode === "testnet") {
         const order = await binanceSigned("POST", "/api/v3/order", {
@@ -88,6 +98,7 @@ async function runAgentCycle() {
         botState.tradesCount += 1;
         decision = `BUY EXECUTED (${orderNotional.toFixed(2)} USDT)`;
         executionDetail = `OrderID: ${order.orderId} | الحالة: ${order.status}`;
+        await fetchUsdtBalance();
       } else {
         decision = `PAPER BUY (${orderNotional.toFixed(2)} USDT)`;
       }
@@ -137,6 +148,14 @@ const server = http.createServer(async (req, res) => {
   const url = req.url.split("?")[0];
 
   if (url === "/" || url === "/health") {
+    if (API_KEY && API_SECRET) {
+      try {
+        await fetchUsdtBalance();
+        botState.lastError = null;
+      } catch (err) {
+        botState.lastError = err.message;
+      }
+    }
     return sendJson(res, 200, {
       ok: true,
       service: "grok-bot-binance-bridge",
@@ -145,6 +164,17 @@ const server = http.createServer(async (req, res) => {
       testnet: USE_TESTNET,
       state: botState
     });
+  }
+
+  if (url === "/api/balance" && req.method === "GET") {
+    try {
+      const bal = await fetchUsdtBalance();
+      botState.lastError = null;
+      return sendJson(res, 200, { ok: true, usdtFree: botState.usdtFree, usdtLocked: botState.usdtLocked, bal });
+    } catch (err) {
+      botState.lastError = err.message;
+      return sendJson(res, 500, { ok: false, error: err.message });
+    }
   }
 
   if (url === "/api/status" && req.method === "GET") {
@@ -164,7 +194,7 @@ const server = http.createServer(async (req, res) => {
 
     if (loopTimer) clearInterval(loopTimer);
     await runAgentCycle();
-    loopTimer = setInterval(runAgentCycle, 30000); // دورة فحص وتداول كل 30 ثانية
+    loopTimer = setInterval(runAgentCycle, 30000);
 
     return sendJson(res, 200, { ok: true, message: "تم بدء التداول الآلي", state: botState });
   }
